@@ -2,8 +2,6 @@ name: Build GhostKernel Signed Release
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, v1.2-audio-safe, v1.3-ghost-brain]
 
 concurrency:
   group: ghostkernel-signed-release
