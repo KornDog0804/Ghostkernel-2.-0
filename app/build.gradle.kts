@@ -23,9 +23,9 @@ extensions.configure<ApplicationExtension>("android") {
         applicationId = "com.github.soundpod"
         minSdk = 23
         targetSdk = 37
-        val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
-        versionCode = ciRunNumber ?: 28
-        versionName = if (ciRunNumber != null) "1.3.3-b$ciRunNumber" else "1.3.3-local"
+        val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
+        versionCode = 20000 + ciRunNumber
+        versionName = "2.0.0-b$ciRunNumber"
 
         val kornOsSyncUrl = System.getenv("KORNOS_SYNC_URL").orEmpty()
         val kornOsSyncKey = System.getenv("KORNOS_SYNC_KEY").orEmpty()
