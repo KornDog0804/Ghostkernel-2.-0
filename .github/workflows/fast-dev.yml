@@ -3,7 +3,7 @@ name: GhostKernel 2.0 Fast Dev APK
 on:
   push:
     branches:
-      - ghostkernel-2
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -34,18 +34,27 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
-        run: ./gradlew :app:assembleDebug --build-cache --parallel
+      - name: Build GhostKernel GitHub debug APK
+        run: ./gradlew :app:assembleGithubDebug --build-cache --parallel
 
-      - name: Name debug APK
+      - name: Find and name APK
         run: |
+          APK=$(find app/build/outputs/apk -type f -name "*.apk" | grep -i github | grep -i debug | head -1)
+
+          if [ -z "$APK" ]; then
+            echo "GitHub debug APK not found"
+            find app/build/outputs -type f -name "*.apk" -print
+            exit 1
+          fi
+
           OUTPUT="GhostKernel-2.0-dev-${GITHUB_RUN_NUMBER}.apk"
-          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -1)
-          test -n "$APK"
           cp "$APK" "$OUTPUT"
           echo "OUTPUT_APK=$OUTPUT" >> "$GITHUB_ENV"
 
-      - name: Upload debug APK
+          echo "Built:"
+          ls -lh "$OUTPUT"
+
+      - name: Upload GhostKernel 2.0 APK
         uses: actions/upload-artifact@v4
         with:
           name: GhostKernel-2.0-dev-${{ github.run_number }}
