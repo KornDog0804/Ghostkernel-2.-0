@@ -1,0 +1,53 @@
+name: GhostKernel 2.0 Fast Dev APK
+
+on:
+  push:
+    branches:
+      - ghostkernel-2
+  workflow_dispatch:
+
+concurrency:
+  group: ghostkernel2-dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --build-cache --parallel
+
+      - name: Name debug APK
+        run: |
+          OUTPUT="GhostKernel-2.0-dev-${GITHUB_RUN_NUMBER}.apk"
+          APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -1)
+          test -n "$APK"
+          cp "$APK" "$OUTPUT"
+          echo "OUTPUT_APK=$OUTPUT" >> "$GITHUB_ENV"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GhostKernel-2.0-dev-${{ github.run_number }}
+          path: ${{ env.OUTPUT_APK }}
+          if-no-files-found: error

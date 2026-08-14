@@ -1,0 +1,261 @@
+package com.github.core.ui
+
+import android.graphics.Bitmap
+import android.os.Parcel
+import android.os.Parcelable
+import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+import androidx.palette.graphics.Palette
+import kotlinx.parcelize.IgnoredOnParcel
+import kotlinx.parcelize.Parceler
+import kotlinx.parcelize.Parcelize
+import kotlinx.parcelize.WriteWith
+
+typealias ParcelableColor = @WriteWith<ColorParceler> Color
+
+@Parcelize
+@Immutable
+data class ColorPalette(
+    val background0: ParcelableColor,
+    val background1: ParcelableColor,
+    val background2: ParcelableColor,
+    val iconColor: ParcelableColor,
+    val accent: ParcelableColor,
+    val onAccent: ParcelableColor,
+    val black: ParcelableColor = Color.Black,
+    val red: ParcelableColor = Color(0xffbf4040),
+    val blue: ParcelableColor = Color(0xff4472cf),
+    val yellow: ParcelableColor = Color(0xfffff176),
+    val text: ParcelableColor,
+    val textSecondary: ParcelableColor,
+    val textDisabled: ParcelableColor,
+    val isDefault: Boolean,
+    val isDark: Boolean
+) : Parcelable {
+    @IgnoredOnParcel
+    val background3: Color get() = if (isDark) Color(0xFF1a0a2e) else Color.White
+
+    @IgnoredOnParcel
+    val background4: Color get() = if (isDark) Color(0xFF0d0517) else Color(0xFFF6F6F8)
+
+    @IgnoredOnParcel
+    val cardColor: Color get() = if (isDark) Color(0xFF2a1040) else Color(0xFF9C9C9C)
+
+    @IgnoredOnParcel
+    val boxColor: Color get() = if (isDark) Color(0xFF1a0a2e) else Color.White
+
+    @IgnoredOnParcel
+    val glass: Color get() = if (isDark) Color.White.copy(alpha = 0.07f) else Color.Black.copy(alpha = 0.04f)
+
+    companion object
+}
+
+// ── GhostKernel brand colors ─────────────────────────────────────────────────
+// Knowledge Never Dies.
+// Only these two lines change from the original GhostKernel file.
+// The defaultAccentColor drives both light and dark default palettes.
+// Changing it here changes every default tint across the entire app.
+
+private val defaultAccentColor = Color(0xFF7FD41A).hsl   // KornDog neon green
+
+// ── GhostKernel default dark palette ─────────────────────────────────────────
+// OLED black background, neon green accent, purple-tinted surfaces.
+// This is what the app looks like before album art changes the palette.
+
+val defaultLightPalette = ColorPalette(
+    background0 = Color(0xFFF4F4F4),
+    background1 = Color(0xFFEAEAF0),
+    background2 = Color(0xFFDDDDEA),
+    iconColor = Color.Black,
+    text = Color(0xFF111114),
+    textSecondary = Color(0xFF444458),
+    textDisabled = Color(0xFF9090A0),
+    accent = Color(0xFF7FD41A),         // GhostKernel green
+    onAccent = Color(0xFF090909),       // black text on green
+    isDefault = true,
+    isDark = false
+)
+
+val defaultDarkPalette = ColorPalette(
+    background0 = Color(0xFF090909),    // GhostKernel OLED black
+    background1 = Color(0xFF111114),    // GhostKernel surface
+    background2 = Color(0xFF18181D),    // GhostKernel surface2
+    iconColor = Color.White,
+    text = Color(0xFF7FD41A),           // KornDog green - song titles
+    textSecondary = Color(0xFFC8A8FF),  // purple-white - artist names
+    textDisabled = Color(0xFF3A3A4A),   // GhostKernel text muted
+    accent = Color(0xFF7FD41A),         // GhostKernel green
+    onAccent = Color(0xFF090909),       // black text on green
+    isDefault = true,
+    isDark = true
+)
+
+// ── Everything below this line is UNCHANGED from GhostKernel ────────────────────
+// The dynamic palette system (album art color extraction) stays exactly as-is.
+// GhostKernel green is only the DEFAULT — album art still dynamically
+// shifts the accent color per track, which looks great with our dark surfaces.
+
+private fun lightColorPalette(accent: Hsl) = ColorPalette(
+    background0 = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.1f),
+        lightness = 0.925f
+    ),
+    background1 = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.3f),
+        lightness = 0.90f
+    ),
+    background2 = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.4f),
+        lightness = 0.85f
+    ),
+    iconColor = Color.Black,
+    accent = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.5f),
+        lightness = 0.5f
+    ),
+    onAccent = Color.White,
+    text = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.02f),
+        lightness = 0.12f
+    ),
+    textSecondary = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.1f),
+        lightness = 0.40f
+    ),
+    textDisabled = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.2f),
+        lightness = 0.65f
+    ),
+    isDefault = false,
+    isDark = false
+)
+
+private fun darkColorPalette(accent: Hsl, darkness: Darkness) = ColorPalette(
+    background0 = if (darkness == Darkness.Normal) Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.1f),
+        lightness = 0.10f
+    ) else Color.Black,
+    background1 = if (darkness == Darkness.Normal) Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.3f),
+        lightness = 0.15f
+    ) else Color.Black,
+    background2 = if (darkness == Darkness.Normal) Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.4f),
+        lightness = 0.2f
+    ) else Color.Black,
+    iconColor = Color.White,
+    accent = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(if (darkness == Darkness.AMOLED) 0.4f else 0.5f),
+        lightness = 0.5f
+    ),
+    onAccent = Color.White,
+    text = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.02f),
+        lightness = 0.88f
+    ),
+    textSecondary = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.1f),
+        lightness = 0.65f
+    ),
+    textDisabled = Color.hsl(
+        hue = accent.hue,
+        saturation = accent.saturation.coerceAtMost(0.2f),
+        lightness = 0.40f
+    ),
+    isDefault = false,
+    isDark = true
+)
+
+fun accentColorOf(
+    source: ColorSource,
+    isDark: Boolean,
+    materialAccentColor: Color?,
+    sampleBitmap: Bitmap?
+): Hsl = when (source) {
+    ColorSource.Default -> defaultAccentColor
+    ColorSource.Dynamic -> sampleBitmap?.let { dynamicAccentColorOf(it, isDark) } ?: defaultAccentColor
+    ColorSource.MaterialYou -> materialAccentColor?.hsl ?: defaultAccentColor
+}
+
+fun dynamicAccentColorOf(
+    bitmap: Bitmap,
+    isDark: Boolean
+): Hsl? {
+    val builder = Palette.from(bitmap).maximumColorCount(8)
+    if (isDark) {
+        builder.addFilter { _, hsl -> hsl[0] !in 36f..100f }
+    }
+
+    var palette = builder.generate()
+    var swatch = palette.dominantSwatch
+
+    if (isDark && swatch == null) {
+        palette = Palette.from(bitmap).maximumColorCount(8).generate()
+        swatch = palette.dominantSwatch
+    }
+
+    val hslArray = swatch?.hsl ?: return null
+
+    if (hslArray[1] < 0.08f) {
+        val colorfulSwatch = palette.swatches.maxByOrNull { it.hsl[1] }
+
+        if (colorfulSwatch != null && colorfulSwatch.hsl[1] > 0f) {
+            return colorfulSwatch.hsl.hsl
+        }
+    }
+    return hslArray.hsl
+}
+
+fun colorPaletteOf(
+    source: ColorSource,
+    darkness: Darkness,
+    isDark: Boolean,
+    materialAccentColor: Color?,
+    sampleBitmap: Bitmap?
+): ColorPalette {
+    val accentColor = accentColorOf(source, isDark, materialAccentColor, sampleBitmap)
+    val isDefaultAccent = accentColor == defaultAccentColor
+
+    if (isDefaultAccent) {
+        if (!isDark) return defaultLightPalette
+        if (darkness == Darkness.Normal) return defaultDarkPalette
+    }
+
+    return if (isDark) {
+        darkColorPalette(accentColor, darkness).copy(isDefault = isDefaultAccent)
+    } else {
+        lightColorPalette(accentColor).copy(isDefault = isDefaultAccent)
+    }
+}
+
+inline val ColorPalette.isPureBlack get() = background0 == Color.Black
+
+inline val ColorPalette.favoritesIcon: ParcelableColor
+    get() = if (isDefault) red else accent
+
+inline val ColorPalette.surface: ParcelableColor
+    get() = if (isPureBlack) Color(0xff272727) else background2
+
+object ColorParceler : Parceler<Color> {
+    override fun Color.write(parcel: Parcel, flags: Int) {
+        parcel.writeLong(this.value.toLong())
+    }
+
+    override fun create(parcel: Parcel): Color {
+        val colorValue = parcel.readLong()
+        return Color(colorValue.toULong())
+    }
+}

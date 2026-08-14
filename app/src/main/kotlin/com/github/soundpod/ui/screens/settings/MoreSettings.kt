@@ -1,0 +1,242 @@
+package com.github.soundpod.ui.screens.settings
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.ComponentName
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.provider.Settings
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.core.content.FileProvider
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AddLink
+import androidx.compose.material.icons.outlined.Battery0Bar
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Stars
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SnapshotMutationPolicy
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.core.net.toUri
+import com.github.soundpod.R
+import com.github.soundpod.ui.navigation.SettingsDestinations
+import com.github.soundpod.service.PlayerMediaBrowserService
+import com.github.soundpod.ui.common.IconSource
+import com.github.soundpod.ui.components.SwitchSetting
+import com.github.soundpod.utils.isAtLeastAndroid12
+import com.github.soundpod.utils.isAtLeastAndroid13
+import com.github.soundpod.utils.isIgnoringBatteryOptimizations
+import com.github.soundpod.utils.isInvincibilityEnabledKey
+import com.github.soundpod.utils.rememberPreference
+import com.github.soundpod.utils.toast
+
+@SuppressLint("BatteryLife")
+@Composable
+fun MoreSettingsContent(onOptionClick: (String) -> Unit = {}) {
+    val context = LocalContext.current
+
+    var isAndroidAutoEnabled by remember {
+        val component = ComponentName(context, PlayerMediaBrowserService::class.java)
+        val disabledFlag = PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        val enabledFlag = PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+        mutableStateOf(
+            value = context.packageManager.getComponentEnabledSetting(component) == enabledFlag,
+            policy = object : SnapshotMutationPolicy<Boolean> {
+                override fun equivalent(a: Boolean, b: Boolean): Boolean {
+                    context.packageManager.setComponentEnabledSetting(
+                        component,
+                        if (b) enabledFlag else disabledFlag,
+                        PackageManager.DONT_KILL_APP
+                    )
+                    return a == b
+                }
+            }
+        )
+    }
+
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    var isInvincibilityEnabled by rememberPreference(isInvincibilityEnabledKey, false)
+    var isIgnoringBatteryOptimizations by remember { mutableStateOf(context.isIgnoringBatteryOptimizations) }
+    val activityResultLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            isIgnoringBatteryOptimizations = context.isIgnoringBatteryOptimizations
+        }
+
+    Column {
+        SettingsGroup(
+            title = "GhostKernel"
+        ) {
+            SettingsColumn(
+                icon = IconSource.Vector(Icons.Outlined.Stars),
+                title = "My Music DNA",
+                description = "Tune your taste profile",
+                onClick = {
+                    val intent = Intent(context, Class.forName("com.github.soundpod.SettingsActivity")).apply {
+                        putExtra("SCREEN_ID", SettingsDestinations.MUSIC_DNA)
+                    }
+                    context.startActivity(intent)
+                }
+            )
+
+            SettingsColumn(
+                icon = IconSource.Vector(Icons.Outlined.BugReport),
+                title = "Share Debug Log",
+                description = "Send crash logs to help fix a bug",
+                onClick = {
+                    val logFile = com.github.soundpod.MainApplication.crashLogFile(context)
+                    if (!logFile.exists() || logFile.length() == 0L) {
+                        context.toast("No crash log yet - nothing has crashed")
+                    } else {
+                        val uri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.provider",
+                            logFile
+                        )
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Debug Log"))
+                    }
+                }
+            )
+        }
+
+        SettingsGroup(
+            title = stringResource(id = R.string.general)
+        ) {
+            SwitchSetting(
+                icon = IconSource.Icon(painterResource(id = R.drawable.android_auto)),
+                title = stringResource(id = R.string.android_auto),
+                description = stringResource(id = R.string.android_auto_description),
+                switchState = isAndroidAutoEnabled,
+                onSwitchChange = { enabled ->
+                    isAndroidAutoEnabled = enabled
+                    if (enabled) {
+                        showInfoDialog = true
+                    }
+                }
+            )
+
+            if (showInfoDialog) {
+                AlertDialog(
+                    onDismissRequest = { showInfoDialog = false },
+                    title = {
+                        Text(text = stringResource(id = R.string.android_auto))
+                    },
+                    text = {
+                        SettingsInformation(
+                            text = stringResource(id = R.string.android_auto_information)
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showInfoDialog = false }) {
+                            Text(stringResource(id = R.string.ok))
+                        }
+                    }
+                )
+            }
+        }
+        SettingsGroup {
+            if (isAtLeastAndroid13) {
+                val intent = Intent(
+                    Settings.ACTION_APP_LOCALE_SETTINGS,
+                    "package:${context.packageName}".toUri()
+                )
+
+                val languageSelectorNotFound = stringResource(id = R.string.language_selector_not_found)
+
+                SettingsColumn(
+                    icon = IconSource.Vector(Icons.Outlined.Language),
+                    title = stringResource(id = R.string.app_language),
+                    description = stringResource(id = R.string.configure_app_language),
+                    onClick = {
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: ActivityNotFoundException) {
+                            context.toast(languageSelectorNotFound)
+                        }
+                    },
+                )
+
+            }
+
+            if (isAtLeastAndroid12) {
+                val intent = Intent(
+                    Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS,
+                    "package:${context.packageName}".toUri()
+                )
+                SettingsColumn(
+                    icon = IconSource.Vector(Icons.Outlined.AddLink),
+                    title = stringResource(id = R.string.open_supported_links_by_default),
+                    description = stringResource(id = R.string.configure_supported_links),
+                    onClick = {
+                        try {
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            context.toast("Couldn't find supported links settings, please configure them manually")
+                        }
+                    },
+                )
+            }
+        }
+
+        SettingsGroup(
+            title = stringResource(id = R.string.service_lifetime)
+        ) {
+            SettingsColumn(
+                icon = IconSource.Vector(Icons.Outlined.Battery0Bar),
+                title = stringResource(id = R.string.ignore_battery_optimizations),
+                description = if (isIgnoringBatteryOptimizations) {
+                    stringResource(id = R.string.already_unrestricted)
+                } else {
+                    stringResource(id = R.string.disable_background_restrictions)
+                },
+                onClick = {
+                    try {
+                        activityResultLauncher.launch(
+                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                                data = "package:${context.packageName}".toUri()
+                            }
+                        )
+                    } catch (_: ActivityNotFoundException) {
+                        try {
+                            activityResultLauncher.launch(
+                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            )
+                        } catch (_: ActivityNotFoundException) {
+                            context.toast("Couldn't find battery optimization settings, please whitelist GhostKernel manually")
+                        }
+                    }
+                },
+                isEnabled = !isIgnoringBatteryOptimizations,
+            )
+
+            SwitchSetting(
+                icon = IconSource.Vector(Icons.Outlined.Stars),
+                title = stringResource(id = R.string.service_lifetime),
+                description = stringResource(id = R.string.service_lifetime_description),
+                switchState = isInvincibilityEnabled,
+                onSwitchChange = { isInvincibilityEnabled = it }
+            )
+        }
+        SettingsInformation(
+            text = stringResource(id = R.string.service_lifetime_information) +
+                    if (isAtLeastAndroid12) "\n" + stringResource(id = R.string.service_lifetime_information_plus) else ""
+        )
+    }
+}

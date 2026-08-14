@@ -1,0 +1,23 @@
+*.iml
+.gradle
+/local.properties
+.idea
+.DS_Store
+
+# CHANGED: Removed leading slash to match ALL build folders
+build/
+
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+.kotlin
+
+# Recommended additions
+*.apk
+*.aab
+
+# Ignore build artifacts and generated properties
+*.dm
+output-metadata.json
+gradle-daemon-jvm.properties

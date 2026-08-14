@@ -1,0 +1,162 @@
+package com.github.soundpod.ui.items
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import com.github.core.ui.LocalAppearance
+import com.github.innertube.Innertube
+import com.github.soundpod.R
+import com.github.soundpod.db
+import com.github.soundpod.models.PlaylistPreview
+import com.github.soundpod.ui.styling.px
+import com.github.soundpod.utils.thumbnail
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+
+@Composable
+fun PlaylistItem(
+    modifier: Modifier = Modifier,
+    playlist: Innertube.PlaylistItem,
+    onClick: () -> Unit
+) {
+    ItemContainer(
+        modifier = modifier,
+        title = playlist.info?.name ?: "",
+        subtitle = playlist.channel?.name,
+        onClick = onClick
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.app_icon),
+                contentDescription = null,
+                modifier = Modifier.size(this@BoxWithConstraints.maxWidth / 2),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            AsyncImage(
+                model = playlist.thumbnail?.url.thumbnail(maxWidth.px),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(maxWidth)
+                    .clip(MaterialTheme.shapes.large)
+            )
+        }
+    }
+}
+
+@Composable
+fun BuiltInPlaylistItem(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    iconSize: Dp = 48.dp,
+    name: String,
+    onClick: () -> Unit
+) {
+    ItemContainer(
+        modifier = modifier,
+        title = name,
+        onClick = onClick
+    ) {
+        Icon(
+            imageVector = icon,
+            modifier = Modifier.size(iconSize),
+            contentDescription = name,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+fun LocalPlaylistItem(
+    modifier: Modifier = Modifier,
+    playlist: PlaylistPreview,
+    onClick: () -> Unit
+) {
+    ItemContainer(
+        modifier = modifier,
+        title = playlist.playlist.name,
+        subtitle = pluralStringResource(
+            id = R.plurals.number_of_songs,
+            count = playlist.songCount,
+            playlist.songCount
+        ),
+        onClick = onClick
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(ratio = 1F),
+            contentAlignment = Alignment.Center
+        ) {
+            val thumbnailWidthDp = maxWidth
+            val thumbnailWidthPx = maxWidth.px
+
+            val thumbnails by remember {
+                db.playlistThumbnailUrls(playlist.playlist.id).distinctUntilChanged().map {
+                    it.map { url ->
+                        url.thumbnail(size = thumbnailWidthPx / 2)
+                    }
+                }
+            }.collectAsState(initial = emptyList(), context = Dispatchers.IO)
+
+            Icon(
+                painter = painterResource(R.drawable.app_icon),
+                contentDescription = null,
+                modifier = Modifier.size(thumbnailWidthDp / 2),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+
+            if (thumbnails.toSet().size == 1) {
+                AsyncImage(
+                    model = thumbnails.firstOrNull()?.thumbnail(thumbnailWidthPx),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(thumbnailWidthDp)
+                        .clip(MaterialTheme.shapes.large)
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    listOf(
+                        Alignment.TopStart,
+                        Alignment.TopEnd,
+                        Alignment.BottomStart,
+                        Alignment.BottomEnd
+                    ).forEachIndexed { index, alignment ->
+                        AsyncImage(
+                            model = thumbnails.getOrNull(index),
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .align(alignment)
+                                .size(thumbnailWidthDp / 2)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
