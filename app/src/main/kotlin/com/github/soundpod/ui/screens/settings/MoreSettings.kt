@@ -24,12 +24,14 @@ import androidx.compose.runtime.SnapshotMutationPolicy
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.core.net.toUri
 import com.github.soundpod.R
+import com.github.soundpod.noutube.NouTubeBridge
 import com.github.soundpod.ui.navigation.SettingsDestinations
 import com.github.soundpod.service.PlayerMediaBrowserService
 import com.github.soundpod.ui.common.IconSource
@@ -40,11 +42,17 @@ import com.github.soundpod.utils.isIgnoringBatteryOptimizations
 import com.github.soundpod.utils.isInvincibilityEnabledKey
 import com.github.soundpod.utils.rememberPreference
 import com.github.soundpod.utils.toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @SuppressLint("BatteryLife")
 @Composable
 fun MoreSettingsContent(onOptionClick: (String) -> Unit = {}) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    var isTestingNouTube by remember { mutableStateOf(false) }
 
     var isAndroidAutoEnabled by remember {
         val component = ComponentName(context, PlayerMediaBrowserService::class.java)
@@ -111,6 +119,55 @@ fun MoreSettingsContent(onOptionClick: (String) -> Unit = {}) {
                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
                         context.startActivity(Intent.createChooser(shareIntent, "Share Debug Log"))
+                    }
+                }
+            )
+
+            SettingsColumn(
+                icon = IconSource.Vector(Icons.Outlined.Stars),
+                title = "Test NouTube Engine",
+                description = if (isTestingNouTube) {
+                    "Testing NouTube native engine..."
+                } else {
+                    "Verify NouTube yt-dlp is running inside GhostKernel"
+                },
+                isEnabled = !isTestingNouTube,
+                onClick = {
+                    if (!isTestingNouTube) {
+                        isTestingNouTube = true
+
+                        coroutineScope.launch {
+                            val testUrl =
+                                "https://music.youtube.com/watch?v=dQw4w9WgXcQ"
+
+                            val result = withContext(Dispatchers.IO) {
+                                NouTubeBridge.listFormats(
+                                    context = context,
+                                    url = testUrl
+                                )
+                            }
+
+                            result
+                                .onSuccess { data ->
+                                    val title =
+                                        data["title"]?.toString()
+                                            ?: "Unknown title"
+
+                                    val formatCount =
+                                        (data["formats"] as? List<*>)?.size ?: 0
+
+                                    context.toast(
+                                        "NouTube engine OK • $title • $formatCount format(s)"
+                                    )
+                                }
+                                .onFailure { error ->
+                                    context.toast(
+                                        "NouTube test failed: ${error.message ?: error.javaClass.simpleName}"
+                                    )
+                                }
+
+                            isTestingNouTube = false
+                        }
                     }
                 }
             )
