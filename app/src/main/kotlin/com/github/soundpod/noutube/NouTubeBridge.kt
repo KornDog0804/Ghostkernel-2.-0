@@ -120,6 +120,27 @@ object NouTubeBridge {
         }
     }
 
+    fun downloadAlbum(
+        context: Context,
+        url: String,
+        onProgress: (
+            progress: Float,
+            etaInSeconds: Long,
+            line: String?
+        ) -> Unit
+    ): Result<NouYtDlp.DownloadResult> {
+        return runCatching {
+            NouYtDlp(
+                context.applicationContext
+            ).downloadVideo(
+                url = url,
+                formatId = "playlist",
+                outputDir = "",
+                onProgress = onProgress
+            )
+        }
+    }
+
     fun downloadAudio(
         context: Context,
         url: String,

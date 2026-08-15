@@ -17,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,8 +28,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -42,11 +46,17 @@ import com.github.soundpod.LocalPlayerServiceBinder
 import com.github.soundpod.db
 import com.github.soundpod.models.LocalMenuState
 import com.github.soundpod.models.Song
+import com.github.soundpod.noutube.NouTubeBridge
 import com.github.soundpod.ui.components.NonQueuedMediaItemMenu
 import com.github.soundpod.ui.items.LocalSongItem
 import com.github.soundpod.ui.styling.Dimensions
 import com.github.soundpod.utils.asMediaItem
 import com.github.soundpod.utils.forcePlayAtIndex
+import com.github.soundpod.utils.toast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.firstOrNull
 
 @OptIn(ExperimentalAnimationApi::class)
 @UnstableApi
@@ -58,14 +68,20 @@ fun AlbumSongs(
     val binder = LocalPlayerServiceBinder.current
     val menuState = LocalMenuState.current
     val playerPadding = LocalPlayerPadding.current
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     val (colorPalette) = LocalAppearance.current
 
     var songs: List<Song> by remember { mutableStateOf(emptyList()) }
     var currentPlayingId by remember { mutableStateOf<String?>(null) }
+    var albumUrl by remember(browseId) { mutableStateOf<String?>(null) }
+    var isDownloadingAlbum by remember(browseId) { mutableStateOf(false) }
     val player = binder?.player
 
     LaunchedEffect(browseId) {
+        albumUrl = db.album(browseId).firstOrNull()?.shareUrl
+
         db.albumSongs(browseId).collect { fetchedSongs ->
             // Albums should always show the artist's actual track sequence,
             // never re-sorted alphabetically - trust the database's native order
@@ -143,6 +159,69 @@ fun AlbumSongs(
                         tint = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.size(16.dp)
                     )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                        .clickable(
+                            enabled = !isDownloadingAlbum
+                        ) {
+                            val url = albumUrl
+
+                            if (url.isNullOrBlank()) {
+                                context.toast("Album download link is not ready yet")
+                                return@clickable
+                            }
+
+                            isDownloadingAlbum = true
+                            context.toast("Downloading album with NouTube…")
+
+                            coroutineScope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    NouTubeBridge.downloadAlbum(
+                                        context = context,
+                                        url = url,
+                                        onProgress = { _, _, _ -> }
+                                    )
+                                }
+
+                                result
+                                    .onSuccess {
+                                        context.toast("Album saved to Music/NouTube")
+                                    }
+                                    .onFailure { error ->
+                                        context.toast(
+                                            "Album download failed: ${
+                                                error.message
+                                                    ?: error.javaClass.simpleName
+                                            }"
+                                        )
+                                    }
+
+                                isDownloadingAlbum = false
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isDownloadingAlbum) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Outlined.Download,
+                            contentDescription = "Download Album",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
