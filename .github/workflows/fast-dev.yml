@@ -34,7 +34,20 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x gradlew
 
-      - name: Build GhostKernel GitHub debug APK
+      - name: Verify KornDog signing key
+        run: |
+          test -f app/korndog-release.keystore
+          keytool -list             -keystore app/korndog-release.keystore             -alias korndog             -storepass "KornDog2024!" >/dev/null
+          echo "KornDog signing key verified"
+
+      - name: Build signed GhostKernel GitHub debug APK
+        env:
+          SIGNING_STORE_FILE: ${{ github.workspace }}/app/korndog-release.keystore
+          SIGNING_STORE_PASSWORD: "KornDog2024!"
+          SIGNING_KEY_ALIAS: "korndog"
+          SIGNING_KEY_PASSWORD: "KornDog2024!"
+          KORNOS_SYNC_URL: ${{ secrets.KORNOS_SYNC_URL }}
+          KORNOS_SYNC_KEY: ${{ secrets.KORNOS_SYNC_KEY }}
         run: ./gradlew :app:assembleGithubDebug --build-cache --parallel
 
       - name: Find and name APK

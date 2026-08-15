@@ -97,6 +97,13 @@ extensions.configure<ApplicationExtension>("android") {
 
         debug {
             applicationIdSuffix = ".debug"
+
+            // CI development builds use the permanent KornDog signing key
+            // so each new SP Debug APK can update the previous build.
+            val releaseConfig = signingConfigs.findByName("release")
+            if (releaseConfig?.storeFile != null) {
+                signingConfig = releaseConfig
+            }
         }
 
         release {
