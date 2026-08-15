@@ -6,6 +6,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -269,6 +270,46 @@ class NouYtDlp(private val context: Context) {
     )
   }
 
+  private fun createYouTubeCookieFile(): File? {
+    val rawCookies = CookieManager
+      .getInstance()
+      .getCookie("https://music.youtube.com")
+      ?.trim()
+      .orEmpty()
+
+    if (rawCookies.isBlank()) {
+      Log.w("NouYtDlp", "No YouTube cookies available from WebView")
+      return null
+    }
+
+    val cookieFile = File(
+      context.cacheDir,
+      "noutube-youtube-${System.currentTimeMillis()}.cookies.txt"
+    )
+
+    cookieFile.bufferedWriter().use { writer ->
+      writer.appendLine("# Netscape HTTP Cookie File")
+      writer.appendLine("# Generated temporarily by GhostKernel/NouTube")
+
+      rawCookies
+        .split(';')
+        .map { it.trim() }
+        .filter { '=' in it }
+        .forEach { cookie ->
+          val name = cookie.substringBefore('=').trim()
+          val value = cookie.substringAfter('=', "").trim()
+
+          if (name.isNotBlank()) {
+            writer.appendLine(
+              ".youtube.com\tTRUE\t/\tTRUE\t0\t$name\t$value"
+            )
+          }
+        }
+    }
+
+    return cookieFile
+  }
+
   private fun downloadSingle(
     url: String,
     formatId: String,
@@ -280,6 +321,12 @@ class NouYtDlp(private val context: Context) {
     }
 
     val request = YoutubeDLRequest(url)
+
+    val cookieFile = createYouTubeCookieFile()
+
+    cookieFile?.let {
+      request.addOption("--cookies", it.absolutePath)
+    }
 
     val safeFormatId = if (
       formatId.isBlank() ||
@@ -343,6 +390,7 @@ class NouYtDlp(private val context: Context) {
         savedPath = savedUri?.toString() ?: "",
       )
     } finally {
+      cookieFile?.delete()
       tempDir.deleteRecursively()
     }
   }
