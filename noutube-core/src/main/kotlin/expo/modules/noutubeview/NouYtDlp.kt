@@ -71,7 +71,6 @@ class NouYtDlp(private val context: Context) {
     request.addOption("--no-playlist")
     request.addOption("-R", "1")
     request.addOption("--socket-timeout", "15")
-    request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
     request.addOption("-f", SINGLE_AUDIO_FORMAT_ID)
 
     val response = YoutubeDL.getInstance().execute(request)
@@ -310,7 +309,6 @@ class NouYtDlp(private val context: Context) {
     request.addOption("--parse-metadata", "%(uploader)s:%(meta_artist)s")
     request.addOption("--parse-metadata", "%(channel)s:%(meta_artist)s")
 
-    request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
     request.addOption("--ignore-errors")
     request.addOption("--no-abort-on-error")
     request.addOption("-R", "2")
@@ -484,7 +482,6 @@ class NouYtDlp(private val context: Context) {
       request.addOption("--flat-playlist")
       request.addOption("--yes-playlist")
       request.addOption("--ignore-errors")
-      request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
       request.addOption("--playlist-end", "1")
       request.addOption("-R", "1")
       request.addOption("--socket-timeout", "12")
@@ -508,7 +505,6 @@ class NouYtDlp(private val context: Context) {
       request.addOption("--no-playlist")
       request.addOption("-R", "1")
       request.addOption("--socket-timeout", "10")
-      request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
       request.addOption("-f", SINGLE_AUDIO_FORMAT_ID)
 
       val response = YoutubeDL.getInstance().execute(request)
