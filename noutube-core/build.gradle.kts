@@ -26,6 +26,7 @@ extensions.configure<LibraryExtension>("android") {
 }
 
 dependencies {
+    implementation(libs.kotlin.coroutines)
     implementation("io.github.junkfood02.youtubedl-android:library:0.17.3")
     implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.17.3")
 
