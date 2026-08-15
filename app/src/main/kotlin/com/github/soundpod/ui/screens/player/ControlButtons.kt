@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Timer
@@ -58,6 +59,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -86,6 +88,7 @@ import com.github.soundpod.db
 import com.github.soundpod.enums.PlayerLayout
 import com.github.soundpod.enums.ProgressBar
 import com.github.soundpod.models.Song
+import com.github.soundpod.noutube.NouTubeBridge
 import com.github.soundpod.query
 import com.github.soundpod.ui.components.CustomDropdownMenu
 import com.github.soundpod.ui.screens.player.seekbar.PaperBoatAnimation
@@ -101,7 +104,10 @@ import com.github.soundpod.utils.rememberPreference
 import com.github.soundpod.utils.shuffleQueue
 import com.github.soundpod.utils.toast
 import com.github.soundpod.utils.trackLoopEnabledKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.PI
 import kotlin.math.cos
@@ -437,7 +443,10 @@ fun PlayerMiddleControl(
     val ctx = LocalContext.current
     val binder = LocalPlayerServiceBinder.current
     val (colorPalette) = LocalAppearance.current
+    val coroutineScope = rememberCoroutineScope()
+
     var likedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+    var isDownloading by remember(mediaId) { mutableStateOf(false) }
 
     LaunchedEffect(mediaId) {
         db.likedAt(mediaId).distinctUntilChanged().collect { likedAt = it }
@@ -506,6 +515,77 @@ fun PlayerMiddleControl(
                 tint = colorPalette.iconColor,
                 modifier = Modifier.size(28.dp)
             )
+        }
+
+        AnimatedIconButton(
+            enabled = !isDownloading,
+            onClick = {
+                val currentMediaId =
+                    binder?.player?.currentMediaItem?.mediaId
+                        ?: mediaId
+
+                if (currentMediaId.startsWith("content://")) {
+                    ctx.toast("This track is already a local file")
+                    return@AnimatedIconButton
+                }
+
+                isDownloading = true
+
+                coroutineScope.launch {
+                    val url =
+                        "https://music.youtube.com/watch?v=$currentMediaId"
+
+                    ctx.toast("Downloading with NouTube…")
+
+                    val result = withContext(Dispatchers.IO) {
+                        NouTubeBridge.downloadAudio(
+                            context = ctx,
+                            url = url,
+                            onProgress = { _, _, _ ->
+                                // NouTube owns the download work.
+                                // Player UI only shows busy state for now.
+                            }
+                        )
+                    }
+
+                    result
+                        .onSuccess { download ->
+                            val destination =
+                                if (download.savedPath.isNotBlank()) {
+                                    "Saved to Music/NouTube"
+                                } else {
+                                    "Download complete"
+                                }
+
+                            ctx.toast(destination)
+                        }
+                        .onFailure { error ->
+                            ctx.toast(
+                                "Download failed: ${
+                                    error.message
+                                        ?: error.javaClass.simpleName
+                                }"
+                            )
+                        }
+
+                    isDownloading = false
+                }
+            }
+        ) {
+            if (isDownloading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = colorPalette.iconColor,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Outlined.Download,
+                    contentDescription = "Download",
+                    tint = colorPalette.iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
 
         AnimatedIconButton(
