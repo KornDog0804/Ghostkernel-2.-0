@@ -4,6 +4,9 @@ package com.github.soundpod.ui.screens.player
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.media.audiofx.AudioEffect
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -560,11 +563,27 @@ fun PlayerMiddleControl(
                             ctx.toast(destination)
                         }
                         .onFailure { error ->
+                            val fullError = buildString {
+                                append("NouTube download failed")
+                                append("\n\n")
+                                append(error.message ?: error.javaClass.name)
+                                append("\n\n")
+                                append(error.stackTraceToString())
+                            }
+
+                            val clipboard =
+                                ctx.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as ClipboardManager
+
+                            clipboard.setPrimaryClip(
+                                ClipData.newPlainText(
+                                    "NouTube download error",
+                                    fullError
+                                )
+                            )
+
                             ctx.toast(
-                                "Download failed: ${
-                                    error.message
-                                        ?: error.javaClass.simpleName
-                                }"
+                                "Download failed • full error copied"
                             )
                         }
 
