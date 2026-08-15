@@ -21,7 +21,7 @@ extensions.configure<ApplicationExtension>("android") {
 
     defaultConfig {
         applicationId = "com.github.soundpod"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 37
         val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
         versionCode = 20000 + ciRunNumber

@@ -95,9 +95,7 @@ class NouGoogleCast(private val context: Context) {
           }
 
           Log.d(TAG, "Discovered ${result.size} Google Cast device(s)")
-          cont.tryResume(result)?.let { token ->
-            cont.completeResume(token)
-          }
+          if (cont.isActive) cont.resume(result)
         }
 
         try {
@@ -108,9 +106,7 @@ class NouGoogleCast(private val context: Context) {
           )
         } catch (e: Exception) {
           Log.e(TAG, "Failed to start route discovery: ${e.message}", e)
-          cont.tryResume(emptyList())?.let { token ->
-            cont.completeResume(token)
-          }
+          if (cont.isActive) cont.resume(emptyList())
           return@suspendCancellableCoroutine
         }
 
@@ -169,9 +165,7 @@ class NouGoogleCast(private val context: Context) {
 
         val success = suspendCancellableCoroutine<Boolean> { cont ->
           remoteClient.load(loadRequest).setResultCallback { result ->
-            cont.tryResume(result.status.isSuccess)?.let { token ->
-              cont.completeResume(token)
-            }
+            if (cont.isActive) cont.resume(result.status.isSuccess)
           }
         }
 
@@ -208,16 +202,12 @@ class NouGoogleCast(private val context: Context) {
         val listener = object : SessionManagerListener<CastSession> {
           override fun onSessionStarted(session: CastSession, sessionId: String) {
             cc.sessionManager.removeSessionManagerListener(this, CastSession::class.java)
-            cont.tryResume(session)?.let { token ->
-              cont.completeResume(token)
-            }
+            if (cont.isActive) cont.resume(session)
           }
 
           override fun onSessionStartFailed(session: CastSession, error: Int) {
             cc.sessionManager.removeSessionManagerListener(this, CastSession::class.java)
-            cont.tryResume(null)?.let { token ->
-              cont.completeResume(token)
-            }
+            if (cont.isActive) cont.resume(null)
           }
 
           override fun onSessionEnded(session: CastSession, error: Int) {}
@@ -233,9 +223,7 @@ class NouGoogleCast(private val context: Context) {
 
         Handler(Looper.getMainLooper()).postDelayed({
           cc.sessionManager.removeSessionManagerListener(listener, CastSession::class.java)
-          cont.tryResume(null)?.let { token ->
-            cont.completeResume(token)
-          }
+          if (cont.isActive) cont.resume(null)
         }, timeoutMs)
       }
     }
