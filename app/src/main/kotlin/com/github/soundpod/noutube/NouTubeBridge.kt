@@ -13,4 +13,19 @@ object NouTubeBridge {
             NouYtDlp(context.applicationContext).listFormats(url)
         }
     }
+
+    fun downloadAudio(
+        context: Context,
+        url: String,
+        onProgress: (progress: Float, etaInSeconds: Long, line: String?) -> Unit
+    ): Result<NouYtDlp.DownloadResult> {
+        return runCatching {
+            NouYtDlp(context.applicationContext).downloadVideo(
+                url = url,
+                formatId = "bestaudio[ext=m4a]/bestaudio/best",
+                outputDir = "",
+                onProgress = onProgress
+            )
+        }
+    }
 }
