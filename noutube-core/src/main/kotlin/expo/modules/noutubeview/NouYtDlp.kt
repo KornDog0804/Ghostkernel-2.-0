@@ -14,7 +14,7 @@ import java.io.File
 import java.lang.reflect.Method
 import org.json.JSONObject
 
-internal class NouYtDlp(private val context: Context) {
+class NouYtDlp(private val context: Context) {
   companion object {
     @Volatile private var youtubeDLInitialized = false
     @Volatile private var ffmpegInitialized = false
