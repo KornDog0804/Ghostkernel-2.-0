@@ -13,6 +13,7 @@ import coil3.disk.directory
 import coil3.request.crossfade
 import com.github.innertube.Innertube
 import com.github.soundpod.extractor.NewPipeDownloader
+import com.github.soundpod.noutube.NouTubeBridge
 import com.github.soundpod.enums.CoilDiskCacheMaxSize
 import com.github.soundpod.utils.coilDiskCacheMaxSizeKey
 import com.github.soundpod.utils.getEnum
@@ -59,6 +60,37 @@ class MainApplication : Application(), SingletonImageLoader.Factory {
 
         Locale.setDefault(Locale.US)
         NewPipeDownloader.init(cacheDir)
+
+        /*
+         * Match NouTube's native bootstrap:
+         * initialize immediately, update yt-dlp in the background
+         * when the 14-day update window has expired.
+         */
+        applicationScope.launch(Dispatchers.IO) {
+            NouTubeBridge
+                .initializeAndUpdateIfNeeded(this@MainApplication)
+                .onSuccess { updated ->
+                    Log.i(
+                        "GhostKernel-NouTube",
+                        if (updated) {
+                            "NouTube engine ready • yt-dlp updated"
+                        } else {
+                            "NouTube engine ready"
+                        }
+                    )
+                }
+                .onFailure { error ->
+                    /*
+                     * An update failure must never prevent
+                     * GhostKernel from launching.
+                     */
+                    Log.e(
+                        "GhostKernel-NouTube",
+                        "NouTube bootstrap/update failed: ${error.message}",
+                        error
+                    )
+                }
+        }
 
         Thread {
             DatabaseInitializer.get(this)

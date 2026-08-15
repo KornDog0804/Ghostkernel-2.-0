@@ -6,7 +6,6 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
-import android.webkit.CookieManager
 import android.webkit.MimeTypeMap
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
@@ -72,6 +71,7 @@ class NouYtDlp(private val context: Context) {
     request.addOption("--no-playlist")
     request.addOption("-R", "1")
     request.addOption("--socket-timeout", "15")
+    request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
     request.addOption("-f", SINGLE_AUDIO_FORMAT_ID)
 
     val response = YoutubeDL.getInstance().execute(request)
@@ -270,46 +270,6 @@ class NouYtDlp(private val context: Context) {
     )
   }
 
-  private fun createYouTubeCookieFile(): File? {
-    val rawCookies = CookieManager
-      .getInstance()
-      .getCookie("https://music.youtube.com")
-      ?.trim()
-      .orEmpty()
-
-    if (rawCookies.isBlank()) {
-      Log.w("NouYtDlp", "No YouTube cookies available from WebView")
-      return null
-    }
-
-    val cookieFile = File(
-      context.cacheDir,
-      "noutube-youtube-${System.currentTimeMillis()}.cookies.txt"
-    )
-
-    cookieFile.bufferedWriter().use { writer ->
-      writer.appendLine("# Netscape HTTP Cookie File")
-      writer.appendLine("# Generated temporarily by GhostKernel/NouTube")
-
-      rawCookies
-        .split(';')
-        .map { it.trim() }
-        .filter { '=' in it }
-        .forEach { cookie ->
-          val name = cookie.substringBefore('=').trim()
-          val value = cookie.substringAfter('=', "").trim()
-
-          if (name.isNotBlank()) {
-            writer.appendLine(
-              ".youtube.com\tTRUE\t/\tTRUE\t0\t$name\t$value"
-            )
-          }
-        }
-    }
-
-    return cookieFile
-  }
-
   private fun downloadSingle(
     url: String,
     formatId: String,
@@ -321,12 +281,6 @@ class NouYtDlp(private val context: Context) {
     }
 
     val request = YoutubeDLRequest(url)
-
-    val cookieFile = createYouTubeCookieFile()
-
-    cookieFile?.let {
-      request.addOption("--cookies", it.absolutePath)
-    }
 
     val safeFormatId = if (
       formatId.isBlank() ||
@@ -356,6 +310,7 @@ class NouYtDlp(private val context: Context) {
     request.addOption("--parse-metadata", "%(uploader)s:%(meta_artist)s")
     request.addOption("--parse-metadata", "%(channel)s:%(meta_artist)s")
 
+    request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
     request.addOption("--ignore-errors")
     request.addOption("--no-abort-on-error")
     request.addOption("-R", "2")
@@ -390,7 +345,6 @@ class NouYtDlp(private val context: Context) {
         savedPath = savedUri?.toString() ?: "",
       )
     } finally {
-      cookieFile?.delete()
       tempDir.deleteRecursively()
     }
   }
@@ -530,6 +484,7 @@ class NouYtDlp(private val context: Context) {
       request.addOption("--flat-playlist")
       request.addOption("--yes-playlist")
       request.addOption("--ignore-errors")
+      request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
       request.addOption("--playlist-end", "1")
       request.addOption("-R", "1")
       request.addOption("--socket-timeout", "12")
@@ -553,6 +508,7 @@ class NouYtDlp(private val context: Context) {
       request.addOption("--no-playlist")
       request.addOption("-R", "1")
       request.addOption("--socket-timeout", "10")
+      request.addOption("--extractor-args", "youtube:player_client=android,web,tv")
       request.addOption("-f", SINGLE_AUDIO_FORMAT_ID)
 
       val response = YoutubeDL.getInstance().execute(request)
