@@ -190,6 +190,7 @@ dependencies {
     implementation(project(":core:visuals"))
     implementation(project(":github"))
     implementation(project(":innertube"))
+    implementation(project(":noutube-core"))
 
     implementation(libs.newpipe.extractor)
 

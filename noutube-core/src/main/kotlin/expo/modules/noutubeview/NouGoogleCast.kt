@@ -1,0 +1,230 @@
+package expo.modules.noutubeview
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import androidx.mediarouter.media.MediaRouteSelector
+import androidx.mediarouter.media.MediaRouter
+import com.google.android.gms.cast.CastMediaControlIntent
+import com.google.android.gms.cast.MediaInfo
+import com.google.android.gms.cast.MediaLoadRequestData
+import com.google.android.gms.cast.MediaMetadata
+import com.google.android.gms.cast.framework.CastContext
+import com.google.android.gms.cast.framework.CastSession
+import com.google.android.gms.cast.framework.SessionManagerListener
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+
+private const val TAG = "NouGoogleCast"
+
+class NouGoogleCast(private val context: Context) {
+
+  private var castContext: CastContext? = null
+  private var activeSession: CastSession? = null
+
+  fun init() {
+    try {
+      castContext = CastContext.getSharedInstance(context)
+      Log.d(TAG, "CastContext initialized")
+    } catch (e: Exception) {
+      Log.e(TAG, "CastContext init failed: ${e.message}", e)
+    }
+  }
+
+  /**
+   * Actively discover Google Cast / Chromecast / Google TV / Onn devices.
+   * This is stronger than just reading router.routes once.
+   */
+  suspend fun discoverDevices(timeoutMs: Long = 2500L): List<Map<String, String>> =
+    withContext(Dispatchers.Main) {
+      castContext ?: return@withContext emptyList()
+
+      val selector = MediaRouteSelector.Builder()
+        .addControlCategory(
+          CastMediaControlIntent.categoryForCast(
+            CastMediaControlIntent.DEFAULT_MEDIA_RECEIVER_APPLICATION_ID
+          )
+        )
+        .build()
+
+      val router = MediaRouter.getInstance(context)
+      val foundRoutes = linkedMapOf<String, MediaRouter.RouteInfo>()
+
+      fun addRoute(route: MediaRouter.RouteInfo?) {
+        if (route == null) return
+        if (!route.matchesSelector(selector)) return
+        if (route.isDefault) return
+        if (route.isBluetooth) return
+        foundRoutes[route.id] = route
+      }
+
+      router.routes.forEach { addRoute(it) }
+
+      suspendCancellableCoroutine<List<Map<String, String>>> { cont ->
+        val callback = object : MediaRouter.Callback() {
+          override fun onRouteAdded(router: MediaRouter, route: MediaRouter.RouteInfo) {
+            addRoute(route)
+          }
+
+          override fun onRouteChanged(router: MediaRouter, route: MediaRouter.RouteInfo) {
+            addRoute(route)
+          }
+
+          override fun onRouteRemoved(router: MediaRouter, route: MediaRouter.RouteInfo) {
+            foundRoutes.remove(route.id)
+          }
+        }
+
+        val handler = Handler(Looper.getMainLooper())
+
+        val finish = Runnable {
+          try {
+            router.removeCallback(callback)
+          } catch (_: Exception) {
+          }
+
+          val result = foundRoutes.values.map { route ->
+            mapOf(
+              "name" to route.name,
+              "id" to route.id,
+              "type" to "googlecast"
+            )
+          }
+
+          Log.d(TAG, "Discovered ${result.size} Google Cast device(s)")
+          if (cont.isActive) cont.resume(result)
+        }
+
+        try {
+          router.addCallback(
+            selector,
+            callback,
+            MediaRouter.CALLBACK_FLAG_REQUEST_DISCOVERY
+          )
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to start route discovery: ${e.message}", e)
+          if (cont.isActive) cont.resume(emptyList())
+          return@suspendCancellableCoroutine
+        }
+
+        handler.postDelayed(finish, timeoutMs)
+
+        cont.invokeOnCancellation {
+          handler.removeCallbacks(finish)
+          try {
+            router.removeCallback(callback)
+          } catch (_: Exception) {
+          }
+        }
+      }
+    }
+
+  suspend fun castUrl(routeId: String, streamUrl: String, title: String): Boolean =
+    withContext(Dispatchers.Main) {
+      val cc = castContext ?: run {
+        Log.e(TAG, "CastContext not initialized")
+        return@withContext false
+      }
+
+      try {
+        val router = MediaRouter.getInstance(context)
+        val route = router.routes.find { it.id == routeId } ?: run {
+          Log.e(TAG, "Route not found: $routeId")
+          return@withContext false
+        }
+
+        router.selectRoute(route)
+
+        val session = awaitCastSession(cc, 10_000) ?: run {
+          Log.e(TAG, "Cast session did not connect")
+          return@withContext false
+        }
+
+        val metadata = MediaMetadata(MediaMetadata.MEDIA_TYPE_MOVIE).apply {
+          putString(MediaMetadata.KEY_TITLE, title)
+        }
+
+        val mediaInfo = MediaInfo.Builder(streamUrl)
+          .setStreamType(MediaInfo.STREAM_TYPE_BUFFERED)
+          .setContentType("video/mp4")
+          .setMetadata(metadata)
+          .build()
+
+        val loadRequest = MediaLoadRequestData.Builder()
+          .setMediaInfo(mediaInfo)
+          .setAutoplay(true)
+          .build()
+
+        val remoteClient = session.remoteMediaClient ?: run {
+          Log.e(TAG, "No remoteMediaClient on cast session")
+          return@withContext false
+        }
+
+        val success = suspendCancellableCoroutine<Boolean> { cont ->
+          remoteClient.load(loadRequest).setResultCallback { result ->
+            if (cont.isActive) cont.resume(result.status.isSuccess)
+          }
+        }
+
+        if (success) {
+          activeSession = session
+          Log.d(TAG, "Google Cast started successfully on route: $routeId")
+        } else {
+          Log.e(TAG, "Google Cast load request failed")
+        }
+
+        success
+      } catch (e: Exception) {
+        Log.e(TAG, "Google Cast failed: ${e.message}", e)
+        false
+      }
+    }
+
+  fun pause() {
+    activeSession?.remoteMediaClient?.pause()
+  }
+
+  fun stop() {
+    activeSession?.remoteMediaClient?.stop()
+    activeSession = null
+  }
+
+  fun isConnected(): Boolean = activeSession?.isConnected == true
+
+  private suspend fun awaitCastSession(cc: CastContext, timeoutMs: Long): CastSession? =
+    withContext(Dispatchers.Main) {
+      cc.sessionManager.currentCastSession?.let { return@withContext it }
+
+      suspendCancellableCoroutine<CastSession?> { cont ->
+        val listener = object : SessionManagerListener<CastSession> {
+          override fun onSessionStarted(session: CastSession, sessionId: String) {
+            cc.sessionManager.removeSessionManagerListener(this, CastSession::class.java)
+            if (cont.isActive) cont.resume(session)
+          }
+
+          override fun onSessionStartFailed(session: CastSession, error: Int) {
+            cc.sessionManager.removeSessionManagerListener(this, CastSession::class.java)
+            if (cont.isActive) cont.resume(null)
+          }
+
+          override fun onSessionEnded(session: CastSession, error: Int) {}
+          override fun onSessionResumed(session: CastSession, wasSuspended: Boolean) {}
+          override fun onSessionResumeFailed(session: CastSession, error: Int) {}
+          override fun onSessionSuspended(session: CastSession, reason: Int) {}
+          override fun onSessionEnding(session: CastSession) {}
+          override fun onSessionResuming(session: CastSession, sessionId: String) {}
+          override fun onSessionStarting(session: CastSession) {}
+        }
+
+        cc.sessionManager.addSessionManagerListener(listener, CastSession::class.java)
+
+        Handler(Looper.getMainLooper()).postDelayed({
+          cc.sessionManager.removeSessionManagerListener(listener, CastSession::class.java)
+          if (cont.isActive) cont.resume(null)
+        }, timeoutMs)
+      }
+    }
+}
