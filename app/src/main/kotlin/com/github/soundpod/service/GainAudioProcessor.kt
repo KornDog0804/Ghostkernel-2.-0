@@ -19,7 +19,7 @@ import kotlin.math.min
 class GainAudioProcessor : BaseAudioProcessor() {
 
     @Volatile
-    var gain: Float = 1.2f
+    var gain: Float = 1.0f
 
     private val limiterThreshold = 0.9f
 

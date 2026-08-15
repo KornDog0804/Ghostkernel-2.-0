@@ -3,6 +3,7 @@ package com.github.soundpod.noutube
 import android.content.Context
 import android.util.Log
 import androidx.core.content.edit
+import com.github.soundpod.MainApplication
 import expo.modules.noutubeview.NouYtDlp
 
 object NouTubeBridge {
@@ -13,6 +14,43 @@ object NouTubeBridge {
 
     private const val TWO_WEEKS_MS =
         14L * 24L * 60L * 60L * 1000L
+
+    private fun recordDownloadFailure(
+        context: Context,
+        operation: String,
+        url: String,
+        error: Throwable
+    ) {
+        Log.e(
+            TAG,
+            "$operation failed: ${error.message}",
+            error
+        )
+
+        runCatching {
+            val appContext = context.applicationContext
+            val causeChain = generateSequence(error as Throwable?) { it.cause }
+                .joinToString(" -> ") { throwable ->
+                    "${throwable.javaClass.name}: ${throwable.message}"
+                }
+
+            MainApplication
+                .crashLogFile(appContext)
+                .appendText(
+                    buildString {
+                        append("\n=== NouTube Download Failure ===\n")
+                        append("Operation: $operation\n")
+                        append("Package: ${appContext.packageName}\n")
+                        append("Cache: ${appContext.cacheDir.absolutePath}\n")
+                        append("URL: $url\n")
+                        append("Cause chain: $causeChain\n")
+                        append("Stack trace:\n")
+                        append(error.stackTraceToString())
+                        append("\n=== End NouTube Failure ===\n")
+                    }
+                )
+        }
+    }
 
     fun initialize(
         context: Context
@@ -130,13 +168,30 @@ object NouTubeBridge {
         ) -> Unit
     ): Result<NouYtDlp.DownloadResult> {
         return runCatching {
+            val appContext = context.applicationContext
+
+            /*
+             * Production safety:
+             * A fresh GhostKernel install has its own yt-dlp runtime/data.
+             * Make sure that runtime is initialized AND updated before the
+             * first album download is allowed to start.
+             */
+            initializeAndUpdateIfNeeded(appContext).getOrThrow()
+
             NouYtDlp(
-                context.applicationContext
+                appContext
             ).downloadVideo(
                 url = url,
                 formatId = "playlist",
                 outputDir = "",
                 onProgress = onProgress
+            )
+        }.onFailure { error ->
+            recordDownloadFailure(
+                context = context,
+                operation = "Album download",
+                url = url,
+                error = error
             )
         }
     }
@@ -151,14 +206,30 @@ object NouTubeBridge {
         ) -> Unit
     ): Result<NouYtDlp.DownloadResult> {
         return runCatching {
+            val appContext = context.applicationContext
+
+            /*
+             * Production safety:
+             * Do not assume the bundled yt-dlp runtime is current.
+             * On a fresh official install, update it before downloading.
+             */
+            initializeAndUpdateIfNeeded(appContext).getOrThrow()
+
             NouYtDlp(
-                context.applicationContext
+                appContext
             ).downloadVideo(
                 url = url,
                 formatId =
                     "bestaudio[ext=m4a]/bestaudio/best",
                 outputDir = "",
                 onProgress = onProgress
+            )
+        }.onFailure { error ->
+            recordDownloadFailure(
+                context = context,
+                operation = "Song download",
+                url = url,
+                error = error
             )
         }
     }

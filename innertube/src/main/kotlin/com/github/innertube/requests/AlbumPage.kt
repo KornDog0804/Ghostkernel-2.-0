@@ -8,7 +8,11 @@ suspend fun Innertube.albumPage(browseId: String): Result<Innertube.PlaylistOrAl
     return playlistPage(browseId = browseId)?.map { album ->
         album.url?.let { Url(it).parameters["list"] }?.let { playlistId ->
             playlistPage(browseId = "VL$playlistId")?.getOrNull()?.let { playlist ->
-                album.copy(songsPage = playlist.songsPage)
+                album.copy(
+                    url = playlist.url
+                        ?: "https://music.youtube.com/playlist?list=$playlistId",
+                    songsPage = playlist.songsPage
+                )
             }
         } ?: album
     }?.map { album ->

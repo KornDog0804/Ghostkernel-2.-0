@@ -538,16 +538,64 @@ fun PlayerMiddleControl(
 
                     ctx.toast("Downloading with NouTube…")
 
-                    val result = withContext(Dispatchers.IO) {
-                        NouTubeBridge.downloadAudio(
-                            context = ctx,
-                            url = url,
-                            onProgress = { _, _, _ ->
-                                // NouTube owns the download work.
-                                // Player UI only shows busy state for now.
-                            }
+                    fun copyDiagnostic(text: String) {
+                        val clipboard =
+                            ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                as android.content.ClipboardManager
+
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText(
+                                "GhostKernel NouTube diagnostic",
+                                text
+                            )
                         )
                     }
+
+                    copyDiagnostic(
+                        "STEP 1: Download button reached\n" +
+                            "Media ID: $currentMediaId\n" +
+                            "URL: $url"
+                    )
+
+                    val result = try {
+                        withContext(Dispatchers.IO) {
+                            NouTubeBridge.downloadAudio(
+                                context = ctx,
+                                url = url,
+                                onProgress = { _, _, line ->
+                                    if (!line.isNullOrBlank()) {
+                                        android.util.Log.d(
+                                            "GhostKernel-NouTube",
+                                            line
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    } catch (error: Throwable) {
+                        val chain = generateSequence(error as Throwable?) { it.cause }
+                            .joinToString("\nCaused by: ") { throwable ->
+                                "${throwable.javaClass.name}: ${throwable.message ?: "(no message)"}"
+                            }
+
+                        val diagnostic =
+                            "STEP 2: EXCEPTION ESCAPED downloadAudio\n" +
+                                "Media ID: $currentMediaId\n" +
+                                "URL: $url\n\n" +
+                                chain
+
+                        copyDiagnostic(diagnostic)
+                        ctx.toast("Download crashed — error copied")
+                        isDownloading = false
+                        return@launch
+                    }
+
+                    copyDiagnostic(
+                        "STEP 2: downloadAudio returned\n" +
+                            "Success: ${result.isSuccess}\n" +
+                            "Error: ${result.exceptionOrNull()?.javaClass?.name}: " +
+                            "${result.exceptionOrNull()?.message}"
+                    )
 
                     result
                         .onSuccess { download ->
@@ -561,12 +609,37 @@ fun PlayerMiddleControl(
                             ctx.toast(destination)
                         }
                         .onFailure { error ->
-                            ctx.toast(
-                                "Download failed: ${
-                                    error.message
-                                        ?: error.javaClass.simpleName
-                                }"
+                            val chain = generateSequence(error as Throwable?) { it.cause }
+                                .joinToString("\nCaused by: ") { throwable ->
+                                    "${throwable.javaClass.name}: ${throwable.message ?: "(no message)"}"
+                                }
+
+                            val fullError = buildString {
+                                appendLine("GhostKernel NouTube download failure")
+                                appendLine("Media ID: $currentMediaId")
+                                appendLine("URL: $url")
+                                appendLine()
+                                append(chain)
+                            }
+
+                            android.util.Log.e(
+                                "GhostKernel-NouTube",
+                                fullError,
+                                error
                             )
+
+                            val clipboard =
+                                ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                                    as android.content.ClipboardManager
+
+                            clipboard.setPrimaryClip(
+                                android.content.ClipData.newPlainText(
+                                    "GhostKernel download error",
+                                    fullError
+                                )
+                            )
+
+                            ctx.toast("Download failed — error copied to clipboard")
                         }
 
                     isDownloading = false

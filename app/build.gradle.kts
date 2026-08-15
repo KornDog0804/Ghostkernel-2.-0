@@ -107,8 +107,10 @@ extensions.configure<ApplicationExtension>("android") {
         }
 
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // NouTube embeds yt-dlp/FFmpeg and uses runtime reflection.
+            // R8 minification breaks the download engine in production builds.
+            isMinifyEnabled = false
+            isShrinkResources = false
 
             // Use release signing if env vars present, else fall back to debug
             val releaseConfig = signingConfigs.findByName("release")

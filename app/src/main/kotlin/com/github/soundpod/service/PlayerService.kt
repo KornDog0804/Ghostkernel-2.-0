@@ -211,7 +211,7 @@ class PlayerService : InvincibleService(), Player.Listener,
         audioEffectManager = AudioEffectManager(this, player, coroutineScope, gainAudioProcessor)
 
         // Restore the saved Extra Boost as soon as the player starts.
-        // Zero means the automatic clean 1.2x GhostKernel baseline.
+        // Zero means transparent 1.0x playback with no automatic gain.
         val savedLoudnessBoost = preferences.getInt(loudnessBoostKey, 0)
         audioEffectManager.setLoudnessBoost(savedLoudnessBoost)
 

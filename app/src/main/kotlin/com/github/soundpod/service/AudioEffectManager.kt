@@ -122,8 +122,8 @@ class AudioEffectManager(
     fun setLoudnessBoost(gainMb: Int) {
         // Real PCM gain via GainAudioProcessor - bypasses Player.volume's 1.0 clamp
         // Clean automatic baseline with optional extra punch.
-        val gain = 1.2f + (gainMb / 1000f) * 0.5f
-        gainAudioProcessor.gain = gain.coerceIn(1.2f, 1.7f)
+        val gain = 1.0f + (gainMb / 1000f) * 0.5f
+        gainAudioProcessor.gain = gain.coerceIn(1.0f, 1.5f)
     }
 
     fun release() {
