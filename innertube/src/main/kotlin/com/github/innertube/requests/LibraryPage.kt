@@ -9,6 +9,7 @@ import com.github.innertube.Innertube
 import com.github.innertube.models.BrowseResponse
 import com.github.innertube.models.MusicTwoRowItemRenderer
 import com.github.innertube.models.bodies.BrowseBody
+import com.github.innertube.models.bodies.ContinuationBody
 import com.github.innertube.utils.runCatchingNonCancellable
 import kotlinx.serialization.json.*
 
@@ -60,6 +61,365 @@ private fun findBrowseIds(el: JsonElement, results: MutableList<String>) {
         is JsonArray -> el.forEach { findBrowseIds(it, results) }
         else -> {}
     }
+}
+
+
+private fun libraryText(element: JsonElement?): String? {
+    val obj = element as? JsonObject ?: return null
+
+    val simpleText =
+        (obj["simpleText"] as? JsonPrimitive)?.content
+
+    if (!simpleText.isNullOrBlank()) {
+        return simpleText
+    }
+
+    val runs = obj["runs"] as? JsonArray
+
+    val runText =
+        runs
+            ?.mapNotNull { run ->
+                (run as? JsonObject)
+                    ?.get("text")
+                    ?.let { it as? JsonPrimitive }
+                    ?.content
+            }
+            ?.joinToString("")
+            ?.trim()
+
+    return runText?.takeIf { it.isNotBlank() }
+}
+
+private fun libraryThumbnail(
+    element: JsonElement?
+): String? {
+    return when (element) {
+
+        is JsonObject -> {
+
+            val directUrl =
+                (element["url"] as? JsonPrimitive)
+                    ?.content
+
+            if (!directUrl.isNullOrBlank()) {
+                directUrl
+            } else {
+                element.values
+                    .firstNotNullOfOrNull {
+                        libraryThumbnail(it)
+                    }
+            }
+        }
+
+        is JsonArray ->
+            element.firstNotNullOfOrNull {
+                libraryThumbnail(it)
+            }
+
+        else -> null
+    }
+}
+
+private fun playlistBrowseId(
+    obj: JsonObject
+): String? {
+
+    val directEndpoint =
+        obj["navigationEndpoint"]
+            as? JsonObject
+
+    val directBrowse =
+        directEndpoint
+            ?.get("browseEndpoint")
+            as? JsonObject
+
+    val directId =
+        (directBrowse?.get("browseId")
+            as? JsonPrimitive)
+            ?.content
+
+    if (
+        directId != null &&
+        directId.startsWith("VL")
+    ) {
+        return directId
+    }
+
+    val title =
+        obj["title"]
+            as? JsonObject
+
+    val runs =
+        title?.get("runs")
+            as? JsonArray
+
+    runs?.forEach { run ->
+
+        val runObject =
+            run as? JsonObject
+                ?: return@forEach
+
+        val endpoint =
+            runObject["navigationEndpoint"]
+                as? JsonObject
+
+        val browseEndpoint =
+            endpoint?.get("browseEndpoint")
+                as? JsonObject
+
+        val browseId =
+            (browseEndpoint?.get("browseId")
+                as? JsonPrimitive)
+                ?.content
+
+        if (
+            browseId != null &&
+            browseId.startsWith("VL")
+        ) {
+            return browseId
+        }
+    }
+
+    return null
+}
+
+private fun rawPlaylist(
+    obj: JsonObject
+): YouTubePlaylist? {
+
+    val browseId =
+        playlistBrowseId(obj)
+            ?: return null
+
+    val title =
+        libraryText(obj["title"])
+            ?: libraryText(obj["headline"])
+            ?: libraryText(obj["primaryText"])
+            ?: return null
+
+    val thumbnail =
+        libraryThumbnail(
+            obj["thumbnailRenderer"]
+        )
+            ?: libraryThumbnail(
+                obj["thumbnail"]
+            )
+            ?: libraryThumbnail(
+                obj["thumbnails"]
+            )
+
+    return YouTubePlaylist(
+        id = browseId,
+        title = title,
+        thumbnail = thumbnail
+    )
+}
+
+private fun collectRawPlaylists(
+    element: JsonElement,
+    results: MutableList<YouTubePlaylist>
+) {
+
+    when (element) {
+
+        is JsonObject -> {
+
+            rawPlaylist(element)
+                ?.let { playlist ->
+
+                    if (
+                        results.none {
+                            it.id == playlist.id
+                        }
+                    ) {
+                        results.add(playlist)
+                    }
+                }
+
+            element.values.forEach {
+                collectRawPlaylists(
+                    it,
+                    results
+                )
+            }
+        }
+
+        is JsonArray ->
+            element.forEach {
+                collectRawPlaylists(
+                    it,
+                    results
+                )
+            }
+
+        else -> Unit
+    }
+}
+
+private fun collectLibraryContinuationTokens(
+    element: JsonElement,
+    results: MutableSet<String>
+) {
+
+    when (element) {
+
+        is JsonObject -> {
+
+            val nextContinuationData =
+                element["nextContinuationData"]
+                    as? JsonObject
+
+            val continuation =
+                (nextContinuationData
+                    ?.get("continuation")
+                    as? JsonPrimitive)
+                    ?.content
+
+            if (!continuation.isNullOrBlank()) {
+                results.add(continuation)
+            }
+
+            val continuationCommand =
+                element["continuationCommand"]
+                    as? JsonObject
+
+            val commandToken =
+                (continuationCommand
+                    ?.get("token")
+                    as? JsonPrimitive)
+                    ?.content
+
+            if (!commandToken.isNullOrBlank()) {
+                results.add(commandToken)
+            }
+
+            element.values.forEach {
+                collectLibraryContinuationTokens(
+                    it,
+                    results
+                )
+            }
+        }
+
+        is JsonArray ->
+            element.forEach {
+                collectLibraryContinuationTokens(
+                    it,
+                    results
+                )
+            }
+
+        else -> Unit
+    }
+}
+
+private suspend fun Innertube.libraryContinuationJson(
+    continuation: String
+): JsonElement? {
+
+    return runCatching {
+
+        val statement =
+            client.post(BROWSE) {
+
+                attributes.put(
+                    Innertube.Attributes.UseCookies,
+                    true
+                )
+
+                cookies?.let { cookieString ->
+
+                    header(
+                        "Cookie",
+                        cookieString
+                    )
+
+                    header(
+                        "X-Goog-AuthUser",
+                        "0"
+                    )
+
+                    visitorData?.let {
+                        header(
+                            "X-Goog-Visitor-Id",
+                            it
+                        )
+                    }
+
+                    header(
+                        "Origin",
+                        "https://music.youtube.com"
+                    )
+
+                    header(
+                        "Referer",
+                        "https://music.youtube.com/"
+                    )
+
+                    header(
+                        "X-Origin",
+                        "https://music.youtube.com"
+                    )
+
+                    val sapisid =
+                        cookieString
+                            .split("; ")
+                            .find {
+                                it.startsWith(
+                                    "SAPISID="
+                                )
+                            }
+                            ?.substringAfter(
+                                "SAPISID="
+                            )
+
+                    if (sapisid != null) {
+
+                        val ts =
+                            System.currentTimeMillis() /
+                                1000
+
+                        val payload =
+                            "$ts $sapisid https://music.youtube.com"
+
+                        val digest =
+                            java.security
+                                .MessageDigest
+                                .getInstance(
+                                    "SHA-1"
+                                )
+                                .digest(
+                                    payload
+                                        .toByteArray()
+                                )
+
+                        val hash =
+                            digest.joinToString(
+                                ""
+                            ) {
+                                "%02x".format(it)
+                            }
+
+                        header(
+                            "Authorization",
+                            "SAPISIDHASH ${ts}_${hash}"
+                        )
+                    }
+                }
+
+                setBody(
+                    ContinuationBody(
+                        continuation =
+                            continuation
+                    )
+                )
+            }
+
+        libJson.parseToJsonElement(
+            statement.bodyAsText()
+        )
+
+    }.getOrNull()
 }
 
 suspend fun Innertube.libraryPage(): Result<List<YouTubePlaylist>>? = runCatchingNonCancellable {
@@ -204,6 +564,11 @@ suspend fun Innertube.libraryPage(): Result<List<YouTubePlaylist>>? = runCatchin
             }
 
             // Deep scan
+            collectRawPlaylists(
+                jsonEl,
+                items
+            )
+
             val allBrowseIds = mutableListOf<String>()
             findBrowseIds(jsonEl, allBrowseIds)
             val vlIds = allBrowseIds.filter { it.startsWith("VL") }
@@ -237,6 +602,88 @@ suspend fun Innertube.libraryPage(): Result<List<YouTubePlaylist>>? = runCatchin
                 }
             }
 
+            /*
+             * YouTube Music can split a user's library across
+             * multiple shelves and continuation chains.
+             *
+             * Follow every unique continuation token we can find,
+             * instead of assuming the first page is the whole library.
+             */
+            val pendingTokens =
+                mutableListOf<String>()
+
+            val discoveredTokens =
+                linkedSetOf<String>()
+
+            collectLibraryContinuationTokens(
+                jsonEl,
+                discoveredTokens
+            )
+
+            pendingTokens.addAll(
+                discoveredTokens
+            )
+
+            val visitedTokens =
+                mutableSetOf<String>()
+
+            var continuationPages = 0
+
+            while (
+                pendingTokens.isNotEmpty() &&
+                continuationPages < 100
+            ) {
+
+                val token =
+                    pendingTokens.removeAt(0)
+
+                if (
+                    !visitedTokens.add(token)
+                ) {
+                    continue
+                }
+
+                val continuationJson =
+                    libraryContinuationJson(
+                        token
+                    )
+                        ?: continue
+
+                continuationPages++
+
+                collectRawPlaylists(
+                    continuationJson,
+                    items
+                )
+
+                val nextTokens =
+                    linkedSetOf<String>()
+
+                collectLibraryContinuationTokens(
+                    continuationJson,
+                    nextTokens
+                )
+
+                nextTokens.forEach {
+                    nextToken ->
+
+                    if (
+                        nextToken !in
+                            visitedTokens &&
+                        nextToken !in
+                            pendingTokens
+                    ) {
+                        pendingTokens.add(
+                            nextToken
+                        )
+                    }
+                }
+            }
+
+            debug.add(
+                "LIB PAGINATION root=$browseId pages=$continuationPages playlists=${items.size}"
+            )
+
             verdict = when {
                 items.isNotEmpty() -> "Found ${items.size} playlists"
                 vlIds.isNotEmpty() -> "Typed parser missed playlists. Model path incomplete."
@@ -250,6 +697,21 @@ suspend fun Innertube.libraryPage(): Result<List<YouTubePlaylist>>? = runCatchin
         }
     }
 
-    lastLibraryDebugInfo = LibraryDebugInfo(lines = debug, verdict = verdict)
-    items
+    val uniqueItems =
+        items.distinctBy {
+            it.id
+        }
+
+    lastLibraryDebugInfo =
+        LibraryDebugInfo(
+            lines = debug,
+            verdict =
+                if (uniqueItems.isNotEmpty()) {
+                    "Found ${uniqueItems.size} playlists"
+                } else {
+                    verdict
+                }
+        )
+
+    uniqueItems
 }
