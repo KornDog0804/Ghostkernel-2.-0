@@ -1,6 +1,7 @@
 package com.github.soundpod.repository
 
 import com.github.innertube.Innertube
+import com.github.innertube.requests.relatedPage
 import com.github.innertube.requests.searchPage
 import com.github.innertube.utils.from
 import com.github.soundpod.db
@@ -15,12 +16,16 @@ data class DiscoveryCardData(
     val headline: String,
     val subtext: String,
     val actionLabel: String,
-    val seedSongs: List<Song>
+    val seedSongs: List<Song>,
+    val source: String
 )
 
 class GhostBrainRepository {
 
-    suspend fun getDiscoveryCard(excludeHeadline: String? = null): DiscoveryCardData? = withContext(Dispatchers.IO) {
+    suspend fun getDiscoveryCard(
+        excludeHeadline: String? = null,
+        requestedSource: String? = null
+    ): DiscoveryCardData? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val candidates = mutableListOf<DiscoveryCardData>()
         // Earned/context-specific signals - these win outright over the generic pool
@@ -35,6 +40,7 @@ class GhostBrainRepository {
             val song = rediscovery.random()
             candidates += DiscoveryCardData(
                 headline = "Time to revisit ${song.artistsText ?: song.title}",
+                source = "ghost_rediscovery",
                 subtext = "You haven't played \"${song.title}\" in a while. Give it another spin.",
                 actionLabel = "Play Again",
                 seedSongs = listOf(song)
@@ -52,6 +58,7 @@ class GhostBrainRepository {
             if (artistSongs.isNotEmpty()) {
                 candidates += DiscoveryCardData(
                     headline = "You've been living in ${artist.name} lately",
+                    source = "ghost_heavy_rotation",
                     subtext = "${artist.playCount} plays this week.",
                     actionLabel = "Keep Going",
                     seedSongs = artistSongs
@@ -68,6 +75,7 @@ class GhostBrainRepository {
                     val journey = chain.drop(1).joinToString(", ")
                     priorityCandidates += DiscoveryCardData(
                         headline = "Every time you play ${chain.first()}, ${chain[1]} follows",
+                        source = "ghost_rabbit_hole",
                         subtext = "You started with ${chain.first()}. Ghost Brain followed the pattern through $journey.",
                         actionLabel = "Start Rabbit Hole",
                         seedSongs = chainSongs
@@ -85,6 +93,7 @@ class GhostBrainRepository {
                 if (artistSongs.isNotEmpty()) {
                     candidates += DiscoveryCardData(
                         headline = "You keep coming back to ${artist.name}",
+                        source = "ghost_favorite_artist",
                         subtext = "${artist.playCount} plays all-time.",
                         actionLabel = "Keep Going",
                         seedSongs = artistSongs
@@ -93,19 +102,114 @@ class GhostBrainRepository {
             }
         }
 
-        // SuperMix - a broad blend across your whole taste pool, not just one artist
-        val topArtistsForMix = runCatching { db.mostPlayedArtists(8).first() }.getOrNull().orEmpty()
+        // SuperMix 2.0
+        //
+        // Ghost Brain chooses the taste anchors from real listening history.
+        // YouTube Music then expands those anchors using relatedPage().
+        //
+        // This keeps SuperMix personal while allowing it to discover songs
+        // beyond what already exists in the local database.
+        val topArtistsForMix =
+            runCatching {
+                db.mostPlayedArtists(8).first()
+            }.getOrNull().orEmpty()
+
         if (topArtistsForMix.size >= 3) {
-            val mixSongs = topArtistsForMix.flatMap { artist ->
-                mostPlayed.filter { it.artistsText == artist.name }.take(3)
-            }.shuffled().take(20)
+
+            val localMixSongs =
+                topArtistsForMix
+                    .flatMap { artist ->
+                        mostPlayed
+                            .filter { it.artistsText == artist.name }
+                            .take(3)
+                    }
+                    .distinctBy { it.id }
+
+            /*
+             * Pick several strong Ghost Brain songs as YouTube discovery anchors.
+             *
+             * Using more than one seed prevents SuperMix from becoming
+             * "radio for one song".
+             */
+            val youtubeSeeds =
+                localMixSongs
+                    .shuffled()
+                    .take(6)
+
+            val youtubeExpansion =
+                youtubeSeeds
+                    .flatMap { seedSong ->
+
+                        runCatching {
+
+                            Innertube
+                                .relatedPage(videoId = seedSong.id)
+                                ?.getOrNull()
+                                ?.songs
+                                .orEmpty()
+                                .take(10)
+                                .map { item ->
+
+                                    val mediaItem = item.asMediaItem
+
+                                    Song(
+                                        id = mediaItem.mediaId,
+                                        title =
+                                            mediaItem
+                                                .mediaMetadata
+                                                .title
+                                                ?.toString()
+                                                ?: mediaItem.mediaId,
+                                        artistsText =
+                                            mediaItem
+                                                .mediaMetadata
+                                                .artist
+                                                ?.toString(),
+                                        durationText =
+                                            mediaItem
+                                                .mediaMetadata
+                                                .extras
+                                                ?.getString("durationText"),
+                                        thumbnailUrl =
+                                            mediaItem
+                                                .mediaMetadata
+                                                .artworkUri
+                                                ?.toString()
+                                    )
+                                }
+
+                        }.getOrNull().orEmpty()
+                    }
+                    .distinctBy { it.id }
+
+            /*
+             * Blend known-good history with YouTube discovery.
+             *
+             * Local favorites remain represented, but related songs make
+             * the mix expand outward from Joey's actual taste.
+             */
+            val mixSongs =
+                (localMixSongs.shuffled().take(12) +
+                    youtubeExpansion.shuffled().take(28))
+                    .distinctBy { it.id }
+                    .shuffled()
+                    .take(40)
+
             if (mixSongs.isNotEmpty()) {
-                candidates += DiscoveryCardData(
-                    headline = "Your SuperMix",
-                    subtext = "A blend across ${topArtistsForMix.size} of your most-played artists.",
-                    actionLabel = "Shuffle SuperMix",
-                    seedSongs = mixSongs
-                )
+
+                candidates +=
+                    DiscoveryCardData(
+                        headline = "Your SuperMix",
+                        source = "ghost_supermix",
+                        subtext =
+                            if (youtubeExpansion.isNotEmpty()) {
+                                "Ghost Brain blended your listening history with ${youtubeExpansion.size} YouTube Music discoveries."
+                            } else {
+                                "A blend across ${topArtistsForMix.size} of your most-played artists."
+                            },
+                        actionLabel = "Shuffle SuperMix",
+                        seedSongs = mixSongs
+                    )
             }
         }
 
@@ -119,6 +223,7 @@ class GhostBrainRepository {
                 if (artistSongs.isNotEmpty()) {
                     priorityCandidates += DiscoveryCardData(
                         headline = "This is your late-night sound",
+                        source = "ghost_late_night",
                         subtext = "You reach for ${artist.name} more than anything else after dark.",
                         actionLabel = "Play",
                         seedSongs = artistSongs
@@ -135,6 +240,7 @@ class GhostBrainRepository {
             if (comfortSongs.isNotEmpty()) {
                 priorityCandidates += DiscoveryCardData(
                     headline = "Not feeling it today?",
+                    source = "ghost_skip_recovery",
                     subtext = "You've skipped $recentSkips tracks recently. Here's stuff you always finish.",
                     actionLabel = "Play Something Sure",
                     seedSongs = comfortSongs
@@ -176,6 +282,7 @@ class GhostBrainRepository {
                 val plays = if (artist.playCount == 1) "once" else "${artist.playCount} times"
                 candidates += DiscoveryCardData(
                     headline = "Take a Chance on ${artist.name}",
+                    source = "ghost_take_a_chance",
                     subtext = "You've only played them $plays. Worth a real shot?",
                     actionLabel = "Take a Chance",
                     seedSongs = wildcardSongs
@@ -189,6 +296,7 @@ class GhostBrainRepository {
             if (topSongs.isNotEmpty()) {
                 candidates += DiscoveryCardData(
                     headline = "Your most played track",
+                    source = "ghost_top_track",
                     subtext = "\"${topSongs.first().title}\" is on repeat.",
                     actionLabel = "Play",
                     seedSongs = topSongs
@@ -202,7 +310,18 @@ class GhostBrainRepository {
         val priorityPool = filteredPriority.ifEmpty { priorityCandidates }
         val candidatePool = filteredCandidates.ifEmpty { candidates }
 
-        priorityPool.randomOrNull() ?: candidatePool.randomOrNull()
+        if (requestedSource != null) {
+            (priorityCandidates + candidates)
+                .filter { it.source == requestedSource }
+                .let { matching ->
+                    matching
+                        .filter { it.headline != excludeHeadline }
+                        .ifEmpty { matching }
+                        .randomOrNull()
+                }
+        } else {
+            priorityPool.randomOrNull() ?: candidatePool.randomOrNull()
+        }
     }
 
     private suspend fun buildArtistChain(seedArtist: String, maxHops: Int): List<String> {

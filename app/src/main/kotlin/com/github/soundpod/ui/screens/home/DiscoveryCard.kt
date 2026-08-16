@@ -1,5 +1,8 @@
 package com.github.soundpod.ui.screens.home
 
+import android.os.Bundle
+import androidx.media3.common.MediaItem
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -67,15 +70,27 @@ fun DiscoveryCard() {
                 color = Color(0xFF7FD41A),
                 fontWeight = FontWeight.Bold
             )
-            IconButton(
-                onClick = { viewModel.loadDiscoveryCard() },
-                modifier = Modifier.size(28.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Outlined.Refresh,
-                    contentDescription = "Refresh",
-                    tint = Color(0xFF7FD41A)
+                Text(
+                    text = viewModel.brainModeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFF7FD41A),
+                    fontWeight = FontWeight.SemiBold
                 )
+
+                IconButton(
+                    onClick = { viewModel.cycleBrainMode() },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Refresh,
+                        contentDescription = "Change Ghost Brain mode: ${viewModel.brainModeLabel}",
+                        tint = Color(0xFF7FD41A)
+                    )
+                }
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -99,8 +114,13 @@ fun DiscoveryCard() {
             Button(
                 onClick = {
                     binder?.stopRadio()
+                    val ghostMediaItems =
+                        card.seedSongs.map { song ->
+                            song.asMediaItem.withGhostSource(card.source)
+                        }
+
                     binder?.player?.forcePlayAtIndex(
-                        card.seedSongs.map(Song::asMediaItem),
+                        ghostMediaItems,
                         0
                     )
                     card.seedSongs.lastOrNull()?.let { lastSong ->
@@ -148,4 +168,24 @@ fun DiscoveryCard() {
             )
         }
     }
+}
+
+
+private fun MediaItem.withGhostSource(source: String): MediaItem {
+    val existingExtras = mediaMetadata.extras
+
+    val taggedExtras =
+        Bundle(existingExtras ?: Bundle()).apply {
+            putString("ghost_source", source)
+        }
+
+    val taggedMetadata =
+        mediaMetadata
+            .buildUpon()
+            .setExtras(taggedExtras)
+            .build()
+
+    return buildUpon()
+        .setMediaMetadata(taggedMetadata)
+        .build()
 }

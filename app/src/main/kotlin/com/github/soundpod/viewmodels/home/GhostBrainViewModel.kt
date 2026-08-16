@@ -25,6 +25,29 @@ class GhostBrainViewModel : ViewModel() {
     var isSyncingToKornOs: Boolean by mutableStateOf(false)
         private set
 
+    data class BrainMode(
+        val label: String,
+        val source: String?
+    )
+
+    private val brainModes = listOf(
+        BrainMode("AUTO", null),
+        BrainMode("RABBIT HOLE", "ghost_rabbit_hole"),
+        BrainMode("SUPERMIX", "ghost_supermix"),
+        BrainMode("REDISCOVER", "ghost_rediscovery"),
+        BrainMode("HEAVY ROTATION", "ghost_heavy_rotation"),
+        BrainMode("TAKE A CHANCE", "ghost_take_a_chance")
+    )
+
+    var brainModeIndex: Int by mutableStateOf(0)
+        private set
+
+    val brainModeLabel: String
+        get() = brainModes[brainModeIndex].label
+
+    private val requestedSource: String?
+        get() = brainModes[brainModeIndex].source
+
     fun syncToKornOs() {
         if (isSyncingToKornOs) return
         isSyncingToKornOs = true
@@ -42,16 +65,30 @@ class GhostBrainViewModel : ViewModel() {
         bridgeMessage = null
     }
 
+    fun cycleBrainMode() {
+        brainModeIndex = (brainModeIndex + 1) % brainModes.size
+        loadDiscoveryCard()
+    }
+
     fun loadDiscoveryCard() {
         val currentHeadline = discoveryCard?.headline
+        val source = requestedSource
+
         viewModelScope.launch(Dispatchers.IO) {
-            val card = runCatching { repository.getDiscoveryCard(excludeHeadline = currentHeadline) }.getOrElse { e ->
+            val card = runCatching {
+                repository.getDiscoveryCard(
+                    excludeHeadline = currentHeadline,
+                    requestedSource = source
+                )
+            }.getOrElse { e ->
                 Log.e("GhostKernel-Brain", "Failed to load discovery card", e)
                 null
             }
             Log.d("GhostKernel-Brain", "loadDiscoveryCard() called, previous=$currentHeadline new=${card?.headline}")
             withContext(Dispatchers.Main) {
-                discoveryCard = card
+                if (card != null) {
+                    discoveryCard = card
+                }
             }
         }
     }
