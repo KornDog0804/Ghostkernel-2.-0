@@ -662,6 +662,96 @@ fun PlayerMiddleControl(
             }
         }
 
+        // KornDog Streaming Generator
+        AnimatedIconButton(
+            onClick = {
+                val currentItem = binder?.player?.currentMediaItem
+
+                if (currentItem != null) {
+                    val metadata = currentItem.mediaMetadata
+
+                    val title =
+                        metadata.title?.toString().orEmpty()
+
+                    val artist =
+                        metadata.artist?.toString().orEmpty()
+
+                    val album =
+                        metadata.albumTitle?.toString().orEmpty()
+
+                    val artwork =
+                        metadata.artworkUri?.toString().orEmpty()
+
+                    val streamingBackground =
+                        "https://korndogrecords.com/images/korndog-streaming-template-blank.png"
+
+                    val generatorUri =
+                        android.net.Uri.parse(
+                            "https://korndogrecords.com/korndog-streaming-generator.html"
+                        )
+                            .buildUpon()
+                            .appendQueryParameter("from", "ghostkernel")
+                            .appendQueryParameter("source", "YouTube Music")
+                            .appendQueryParameter("musicSource", "YouTube Music")
+                            .appendQueryParameter("mode", "stream")
+                            .appendQueryParameter(
+                                "background",
+                                streamingBackground
+                            )
+                            .appendQueryParameter(
+                                "bg",
+                                streamingBackground
+                            )
+                            .appendQueryParameter(
+                                "posterBg",
+                                streamingBackground
+                            )
+                            .apply {
+                                if (artist.isNotBlank()) {
+                                    appendQueryParameter("artist", artist)
+                                }
+
+                                if (title.isNotBlank()) {
+                                    appendQueryParameter("title", title)
+                                    appendQueryParameter("track", title)
+                                    appendQueryParameter("song", title)
+                                }
+
+                                if (album.isNotBlank()) {
+                                    appendQueryParameter("album", album)
+                                }
+
+                                if (artwork.isNotBlank()) {
+                                    appendQueryParameter("thumb", artwork)
+                                    appendQueryParameter("art", artwork)
+                                    appendQueryParameter("albumArt", artwork)
+                                    appendQueryParameter("cover", artwork)
+                                }
+                            }
+                            .build()
+
+                    val posterIntent =
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            generatorUri
+                        )
+
+                    try {
+                        ctx.startActivity(posterIntent)
+                    } catch (error: ActivityNotFoundException) {
+                        ctx.toast("Unable to open KornDog Streaming Generator")
+                    }
+                }
+            },
+        ) {
+            Text(
+                text = "POSTER",
+                color = colorPalette.iconColor,
+                style = typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
         AnimatedIconButton(
             onClick = {
                 val shareMediaId = binder?.player?.currentMediaItem?.mediaId
