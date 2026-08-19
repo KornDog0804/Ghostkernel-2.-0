@@ -676,8 +676,24 @@ fun PlayerMiddleControl(
                     val artist =
                         metadata.artist?.toString().orEmpty()
 
-                    val album =
+                    val metadataAlbum =
                         metadata.albumTitle?.toString().orEmpty()
+
+                    val realAlbum =
+                        db.songAlbumInfo(currentItem.mediaId)
+                            ?.name
+                            .orEmpty()
+
+                    val album =
+                        realAlbum.ifBlank {
+                            metadataAlbum.takeUnless { value ->
+                                value.matches(
+                                    Regex(
+                                        """(?i)^\\s*[0-9.,]+\\s*[kmb]?\\s*(plays?|views?|listeners?)\\s*$"""
+                                    )
+                                )
+                            }.orEmpty()
+                        }
 
                     val artwork =
                         metadata.artworkUri?.toString().orEmpty()
