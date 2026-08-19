@@ -138,34 +138,6 @@ fun DiscoveryCard() {
                 Text(text = card.actionLabel)
             }
 
-            Button(
-                onClick = { viewModel.syncToKornOs() },
-                enabled = !viewModel.isSyncingToKornOs,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colorPalette.background1,
-                    contentColor = Color(0xFF7FD41A)
-                )
-            ) {
-                if (viewModel.isSyncingToKornOs) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = Color(0xFF7FD41A)
-                    )
-                } else {
-                    Text(text = "Send to KornOS")
-                }
-            }
-        }
-
-        viewModel.bridgeMessage?.let { message ->
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (message.startsWith("Sent") || message.contains("already")) Color(0xFF7FD41A) else colorPalette.textSecondary
-            )
         }
     }
 }

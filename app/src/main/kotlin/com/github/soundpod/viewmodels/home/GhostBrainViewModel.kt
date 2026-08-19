@@ -8,7 +8,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.github.soundpod.repository.DiscoveryCardData
 import com.github.soundpod.repository.GhostBrainRepository
-import com.github.soundpod.repository.KornOsBridgeRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -18,12 +17,6 @@ class GhostBrainViewModel : ViewModel() {
         private set
 
     private val repository = GhostBrainRepository()
-    private val bridgeRepository = KornOsBridgeRepository()
-
-    var bridgeMessage: String? by mutableStateOf(null)
-        private set
-    var isSyncingToKornOs: Boolean by mutableStateOf(false)
-        private set
 
     data class BrainMode(
         val label: String,
@@ -47,23 +40,6 @@ class GhostBrainViewModel : ViewModel() {
 
     private val requestedSource: String?
         get() = brainModes[brainModeIndex].source
-
-    fun syncToKornOs() {
-        if (isSyncingToKornOs) return
-        isSyncingToKornOs = true
-        bridgeMessage = null
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = bridgeRepository.sync(discoveryCard)
-            withContext(Dispatchers.Main) {
-                isSyncingToKornOs = false
-                bridgeMessage = result.message
-            }
-        }
-    }
-
-    fun clearBridgeMessage() {
-        bridgeMessage = null
-    }
 
     fun cycleBrainMode() {
         brainModeIndex = (brainModeIndex + 1) % brainModes.size

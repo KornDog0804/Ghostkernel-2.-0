@@ -510,20 +510,44 @@ class PlayerService : InvincibleService(), Player.Listener,
                 makeInvincible(false)
                 audioEffectManager.sendOpenEqualizerIntent()
             } else {
-                if (!player.shouldBePlaying) {
-                    isNotificationStarted = false
+                if (!player.shouldBePlaying && player.currentMediaItem != null) {
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        stopForeground(STOP_FOREGROUND_DETACH)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        stopForeground(false)
+                    /*
+                     * Keep GhostKernel's player service alive while paused.
+                     *
+                     * Previously we dropped out of foreground mode here and
+                     * relied on InvincibleService. Invincibility is disabled
+                     * by default, which allowed Android to kill the paused
+                     * service after the app was backgrounded.
+                     *
+                     * A loaded track now keeps the media service foreground,
+                     * preserving the song, queue and playback position.
+                     */
+                    if (!isNotificationStarted) {
+                        isNotificationStarted = true
+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(
+                                NOTIFICATION_ID,
+                                notification,
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                            )
+                        } else {
+                            startForeground(
+                                NOTIFICATION_ID,
+                                notification
+                            )
+                        }
                     }
 
-                    makeInvincible(true)
+                    makeInvincible(false)
                     audioEffectManager.sendCloseEqualizerIntent()
                 }
-                playerNotificationManager.notificationManager?.notify(NOTIFICATION_ID, notification)
+
+                playerNotificationManager.notificationManager?.notify(
+                    NOTIFICATION_ID,
+                    notification
+                )
             }
         }
     }
