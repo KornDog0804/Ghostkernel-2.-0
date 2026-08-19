@@ -253,7 +253,10 @@ class PlayerService : InvincibleService(), Player.Listener,
             }
         }
 
-        queueManager.restoreQueue(isPersistentQueueEnabled)
+        // Always restore the last GhostKernel session.
+        // This restores the song, queue and playback position while
+        // leaving playback paused until the user presses Play.
+        queueManager.restoreQueue(true)
 
         coroutineScope.launch {
             isLikedState
@@ -266,6 +269,9 @@ class PlayerService : InvincibleService(), Player.Listener,
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        // Save before Android has a chance to tear down the process.
+        queueManager.saveQueue(true)
+
         if (preferences.getBoolean(pauseOnAppCloseKey, false)) {
             stopSelf()
         } else if (!player.shouldBePlaying) {
@@ -275,7 +281,8 @@ class PlayerService : InvincibleService(), Player.Listener,
     }
 
     override fun onDestroy() {
-        queueManager.saveQueue(isPersistentQueueEnabled)
+        // Last-chance session snapshot.
+        queueManager.saveQueue(true)
         preferences.unregisterOnSharedPreferenceChangeListener(this)
 
         player.removeListener(this)
@@ -454,9 +461,26 @@ class PlayerService : InvincibleService(), Player.Listener,
             mediaSessionManager.updateMetadata(bitmapProvider, isAtLeastAndroid13, isShowingThumbnailInLockscreen)
         }
 
-        //Playback state updates
-        if (events.containsAny(Player.EVENT_PLAYBACK_STATE_CHANGED, Player.EVENT_PLAY_WHEN_READY_CHANGED, Player.EVENT_POSITION_DISCONTINUITY)) {
+        // Playback state updates
+        if (
+            events.containsAny(
+                Player.EVENT_PLAYBACK_STATE_CHANGED,
+                Player.EVENT_PLAY_WHEN_READY_CHANGED,
+                Player.EVENT_POSITION_DISCONTINUITY
+            )
+        ) {
             updatePlaybackState()
+
+            // Snapshot the current session as soon as playback is paused.
+            // This protects the song and position even if Android later
+            // kills the app without a clean service shutdown.
+            if (
+                events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED) &&
+                !player.shouldBePlaying &&
+                player.currentMediaItem != null
+            ) {
+                queueManager.saveQueue(true)
+            }
         }
 
         //Widget updates
