@@ -668,6 +668,7 @@ fun PlayerMiddleControl(
                 val currentItem = binder?.player?.currentMediaItem
 
                 if (currentItem != null) {
+                    coroutineScope.launch {
                     val metadata = currentItem.mediaMetadata
 
                     val title =
@@ -680,9 +681,11 @@ fun PlayerMiddleControl(
                         metadata.albumTitle?.toString().orEmpty()
 
                     val realAlbum =
-                        db.songAlbumInfo(currentItem.mediaId)
-                            ?.name
-                            .orEmpty()
+                        withContext(Dispatchers.IO) {
+                            db.songAlbumInfo(currentItem.mediaId)
+                                ?.name
+                                .orEmpty()
+                        }
 
                     val album =
                         realAlbum.ifBlank {
@@ -757,14 +760,15 @@ fun PlayerMiddleControl(
                     } catch (error: ActivityNotFoundException) {
                         ctx.toast("Unable to open KornDog Streaming Generator")
                     }
+                    }
                 }
             },
         ) {
-            Text(
-                text = "POSTER",
-                color = colorPalette.iconColor,
-                style = typography.labelSmall,
-                fontWeight = FontWeight.Bold
+            Icon(
+                painter = painterResource(id = R.drawable.zombie_kitty),
+                contentDescription = "KornDog Streaming Poster",
+                tint = Color.Unspecified,
+                modifier = Modifier.size(30.dp)
             )
         }
 

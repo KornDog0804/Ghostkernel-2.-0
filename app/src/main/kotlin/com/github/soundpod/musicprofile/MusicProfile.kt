@@ -1,10 +1,10 @@
 package com.github.soundpod.musicprofile
 
 data class MusicProfile(
-    val favoriteGenres: Set<String> = defaultGenres,
-    val favoriteArtists: Set<String> = defaultArtists,
-    val favoriteDecades: Set<String> = defaultDecades,
-    val favoriteMoods: Set<String> = defaultMoods,
+    val favoriteGenres: Set<String> = emptySet(),
+    val favoriteArtists: Set<String> = emptySet(),
+    val favoriteDecades: Set<String> = emptySet(),
+    val favoriteMoods: Set<String> = emptySet(),
     val favoriteInstruments: Set<String> = emptySet(),
     val favoriteLabels: Set<String> = emptySet()
 ) {

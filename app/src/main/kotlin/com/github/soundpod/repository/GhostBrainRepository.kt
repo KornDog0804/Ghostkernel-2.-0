@@ -5,6 +5,8 @@ import com.github.innertube.requests.relatedPage
 import com.github.innertube.requests.searchPage
 import com.github.innertube.utils.from
 import com.github.soundpod.db
+import com.github.soundpod.appContext
+import com.github.soundpod.musicprofile.MusicProfileRepository
 import com.github.soundpod.models.Song
 import com.github.soundpod.utils.asMediaItem
 import kotlinx.coroutines.Dispatchers
@@ -22,6 +24,9 @@ data class DiscoveryCardData(
 
 class GhostBrainRepository {
 
+    private val musicProfileRepository =
+        MusicProfileRepository(appContext)
+
     suspend fun getDiscoveryCard(
         excludeHeadline: String? = null,
         requestedSource: String? = null
@@ -32,6 +37,26 @@ class GhostBrainRepository {
         // when eligible, instead of competing on a flat coin flip against SuperMix etc.
         val priorityCandidates = mutableListOf<DiscoveryCardData>()
         val mostPlayed = runCatching { db.mostPlayedSongs(60).first() }.getOrNull().orEmpty()
+
+        /*
+         * Music DNA ← Ghost Brain
+         *
+         * Real listening history gradually becomes part of this device's
+         * personal Music DNA. Starter choices are preserved and learned
+         * artists are merged in rather than replacing them.
+         */
+        val learnedArtists =
+            runCatching {
+                db.mostPlayedArtists(12)
+                    .first()
+                    .map { it.name }
+            }.getOrNull().orEmpty()
+
+        if (learnedArtists.isNotEmpty()) {
+            runCatching {
+                musicProfileRepository.mergeLearnedArtists(learnedArtists)
+            }
+        }
 
         // Rediscovery - songs not played in 21+ days
         val rediscoveryCutoff = now - (21L * 24 * 60 * 60 * 1000)
