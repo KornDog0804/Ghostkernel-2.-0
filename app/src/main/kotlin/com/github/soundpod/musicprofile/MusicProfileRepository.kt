@@ -1,6 +1,7 @@
 package com.github.soundpod.musicprofile
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -18,7 +19,19 @@ class MusicProfileRepository(private val context: Context) {
         val MOODS = stringSetPreferencesKey("favorite_moods")
         val INSTRUMENTS = stringSetPreferencesKey("favorite_instruments")
         val LABELS = stringSetPreferencesKey("favorite_labels")
+        val INITIALIZED = booleanPreferencesKey("profile_initialized")
     }
+
+    val isInitialized: Flow<Boolean> =
+        context.musicProfileDataStore.data.map { prefs ->
+            prefs[Keys.INITIALIZED]
+                ?: (
+                    prefs.contains(Keys.ARTISTS) ||
+                    prefs.contains(Keys.GENRES) ||
+                    prefs.contains(Keys.DECADES) ||
+                    prefs.contains(Keys.MOODS)
+                )
+        }
 
     val profile: Flow<MusicProfile> = context.musicProfileDataStore.data.map { prefs ->
         MusicProfile(
@@ -31,6 +44,17 @@ class MusicProfileRepository(private val context: Context) {
         )
     }
 
+
+    suspend fun initializeStarterProfile(
+        artists: Set<String>,
+        genres: Set<String>
+    ) {
+        context.musicProfileDataStore.edit { prefs ->
+            prefs[Keys.ARTISTS] = artists.take(5).toSet()
+            prefs[Keys.GENRES] = genres.take(5).toSet()
+            prefs[Keys.INITIALIZED] = true
+        }
+    }
 
     suspend fun mergeLearnedArtists(artists: Collection<String>) {
         val cleanArtists =
@@ -49,6 +73,12 @@ class MusicProfileRepository(private val context: Context) {
                 (existing + cleanArtists)
                     .take(25)
                     .toSet()
+        }
+    }
+
+    suspend fun resetProfile() {
+        context.musicProfileDataStore.edit { prefs ->
+            prefs.clear()
         }
     }
 

@@ -1,13 +1,32 @@
 package com.github.soundpod.musicprofile
 
 import android.app.Application
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -21,120 +40,333 @@ val GhostPurple = Color(0xFF6A0DAD)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MusicProfileScreen(onBack: () -> Unit) {
+fun MusicProfileScreen(
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
-    val vm: MusicProfileViewModel = viewModel(
-        factory = ViewModelProvider.AndroidViewModelFactory.getInstance(
-            context.applicationContext as Application
+
+    val vm: MusicProfileViewModel =
+        viewModel(
+            factory =
+                ViewModelProvider.AndroidViewModelFactory.getInstance(
+                    context.applicationContext as Application
+                )
         )
-    )
+
     val profile by vm.profile.collectAsStateWithLifecycle()
+    val isInitialized by vm.isInitialized.collectAsStateWithLifecycle()
+
+    var starterArtists by rememberSaveable {
+        mutableStateOf("")
+    }
+
+    var starterGenres by rememberSaveable {
+        mutableStateOf("")
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("My Music DNA", color = GhostGreen) },
+                title = {
+                    Text(
+                        "My Music DNA",
+                        color = GhostGreen
+                    )
+                },
                 navigationIcon = {
-                    TextButton(onClick = onBack) {
-                        Text("Back", color = GhostGreen)
+                    TextButton(
+                        onClick = onBack
+                    ) {
+                        Text(
+                            "Back",
+                            color = GhostGreen
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color(0xFF0D0D0D)
-                )
+                colors =
+                    TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color(0xFF0D0D0D)
+                    )
             )
         },
         containerColor = Color(0xFF0D0D0D)
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.padding(padding).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item { SectionHeader("Genres") }
-            item {
-                ChipGroup(
-                    items = MusicProfile.defaultGenres.toList(),
-                    selected = profile.favoriteGenres,
-                    onToggle = vm::toggleGenre
+
+        if (!isInitialized) {
+
+            Column(
+                modifier =
+                    Modifier
+                        .padding(padding)
+                        .padding(20.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(16.dp)
+            ) {
+
+                Text(
+                    text = "Teach GhostKernel",
+                    style =
+                        MaterialTheme.typography.headlineMedium,
+                    color = GhostGreen
                 )
-            }
-            item { Spacer(Modifier.height(8.dp)) }
-            item { SectionHeader("Artists") }
-            item {
-                ChipGroup(
-                    items = MusicProfile.defaultArtists.toList(),
-                    selected = profile.favoriteArtists,
-                    onToggle = vm::toggleArtist
+
+                Text(
+                    text =
+                        "Start with up to 5 artists and 5 genres you love. " +
+                        "These only give Ghost Brain a starting point. " +
+                        "Your real listening, repeats, likes and skips will " +
+                        "reshape your Music DNA over time.",
+                    color = Color.White
                 )
-            }
-            item { Spacer(Modifier.height(8.dp)) }
-            item { SectionHeader("Decades") }
-            item {
-                ChipGroup(
-                    items = MusicProfile.defaultDecades.toList(),
-                    selected = profile.favoriteDecades,
-                    onToggle = vm::toggleDecade
+
+                OutlinedTextField(
+                    value = starterArtists,
+                    onValueChange = {
+                        starterArtists = it
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Up to 5 artists")
+                    },
+                    placeholder = {
+                        Text(
+                            "Artist 1, Artist 2, Artist 3..."
+                        )
+                    }
                 )
-            }
-            item { Spacer(Modifier.height(8.dp)) }
-            item { SectionHeader("Moods") }
-            item {
-                ChipGroup(
-                    items = MusicProfile.defaultMoods.toList(),
-                    selected = profile.favoriteMoods,
-                    onToggle = vm::toggleMood
+
+                OutlinedTextField(
+                    value = starterGenres,
+                    onValueChange = {
+                        starterGenres = it
+                    },
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    label = {
+                        Text("Up to 5 genres")
+                    },
+                    placeholder = {
+                        Text(
+                            "Metalcore, Hip-Hop, Pop..."
+                        )
+                    }
                 )
-            }
-            item { Spacer(Modifier.height(24.dp)) }
-            item {
+
                 Button(
-                    onClick = { vm.saveProfile(); onBack() },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = GhostGreen,
-                        contentColor = Color.Black
-                    )
+                    onClick = {
+                        val artists =
+                            starterArtists
+                                .split(",")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .take(5)
+                                .toSet()
+
+                        val genres =
+                            starterGenres
+                                .split(",")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .take(5)
+                                .toSet()
+
+                        vm.initializeStarterDNA(
+                            artists = artists,
+                            genres = genres
+                        )
+                    },
+                    enabled =
+                        starterArtists.isNotBlank() &&
+                        starterGenres.isNotBlank(),
+                    modifier =
+                        Modifier.fillMaxWidth(),
+                    colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = GhostGreen,
+                            contentColor = Color.Black
+                        )
                 ) {
-                    Text("Save My DNA", style = MaterialTheme.typography.titleMedium)
+                    Text("Start My Music DNA")
                 }
             }
-            item { Spacer(Modifier.height(32.dp)) }
+
+        } else {
+
+            LazyColumn(
+                modifier =
+                    Modifier
+                        .padding(padding)
+                        .padding(20.dp),
+                verticalArrangement =
+                    Arrangement.spacedBy(12.dp)
+            ) {
+
+                item {
+                    Text(
+                        text =
+                            "GhostKernel is learning from this device's listening history.",
+                        color = Color.LightGray
+                    )
+                }
+
+                item {
+                    SectionHeader("Genres")
+                }
+
+                item {
+                    DNAChipGroup(
+                        profile.favoriteGenres
+                            .toList()
+                            .sorted()
+                    )
+                }
+
+                item {
+                    Spacer(
+                        Modifier.height(8.dp)
+                    )
+                }
+
+                item {
+                    SectionHeader("Artists")
+                }
+
+                item {
+                    DNAChipGroup(
+                        profile.favoriteArtists
+                            .toList()
+                            .sorted()
+                    )
+                }
+
+                if (profile.favoriteDecades.isNotEmpty()) {
+                    item {
+                        Spacer(
+                            Modifier.height(8.dp)
+                        )
+                    }
+
+                    item {
+                        SectionHeader("Decades")
+                    }
+
+                    item {
+                        DNAChipGroup(
+                            profile.favoriteDecades
+                                .toList()
+                                .sorted()
+                        )
+                    }
+                }
+
+                if (profile.favoriteMoods.isNotEmpty()) {
+                    item {
+                        Spacer(
+                            Modifier.height(8.dp)
+                        )
+                    }
+
+                    item {
+                        SectionHeader("Moods")
+                    }
+
+                    item {
+                        DNAChipGroup(
+                            profile.favoriteMoods
+                                .toList()
+                                .sorted()
+                        )
+                    }
+                }
+
+                item {
+                    Spacer(
+                        Modifier.height(24.dp)
+                    )
+                }
+
+                item {
+                    OutlinedButton(
+                        onClick = {
+                            vm.resetMusicDNA()
+                        },
+                        modifier =
+                            Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Reset Music DNA",
+                            color = GhostGreen
+                        )
+                    }
+                }
+
+                item {
+                    Text(
+                        text =
+                            "Reset clears this device's Music DNA and returns " +
+                            "to Teach GhostKernel setup.",
+                        color = Color.Gray,
+                        style =
+                            MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SectionHeader(title: String) {
+fun SectionHeader(
+    title: String
+) {
     Text(
         text = title,
-        style = MaterialTheme.typography.titleMedium,
+        style =
+            MaterialTheme.typography.titleMedium,
         color = GhostGreen,
-        modifier = Modifier.padding(vertical = 4.dp)
+        modifier =
+            Modifier.padding(
+                vertical = 4.dp
+            )
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ChipGroup(
-    items: List<String>,
-    selected: Set<String>,
-    onToggle: (String) -> Unit
+fun DNAChipGroup(
+    items: List<String>
 ) {
-    androidx.compose.foundation.layout.FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+    if (items.isEmpty()) {
+        Text(
+            text = "Still learning...",
+            color = Color.Gray
+        )
+        return
+    }
+
+    FlowRow(
+        horizontalArrangement =
+            Arrangement.spacedBy(8.dp),
+        verticalArrangement =
+            Arrangement.spacedBy(8.dp)
     ) {
         items.forEach { item ->
-            FilterChip(
-                selected = item in selected,
-                onClick = { onToggle(item) },
-                label = { Text(item, color = if (item in selected) Color.Black else Color.White) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = GhostGreen,
-                    containerColor = Color(0xFF1A1A1A)
+            Surface(
+                color = Color(0xFF1A1A1A),
+                shape =
+                    MaterialTheme.shapes.medium
+            ) {
+                Text(
+                    text = item,
+                    color = Color.White,
+                    modifier =
+                        Modifier.padding(
+                            horizontal = 14.dp,
+                            vertical = 9.dp
+                        )
                 )
-            )
+            }
         }
     }
 }

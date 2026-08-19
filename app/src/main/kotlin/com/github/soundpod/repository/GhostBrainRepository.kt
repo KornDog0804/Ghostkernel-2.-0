@@ -52,7 +52,12 @@ class GhostBrainRepository {
                     .map { it.name }
             }.getOrNull().orEmpty()
 
-        if (learnedArtists.isNotEmpty()) {
+        val dnaInitialized =
+            runCatching {
+                musicProfileRepository.isInitialized.first()
+            }.getOrDefault(false)
+
+        if (dnaInitialized && learnedArtists.isNotEmpty()) {
             runCatching {
                 musicProfileRepository.mergeLearnedArtists(learnedArtists)
             }

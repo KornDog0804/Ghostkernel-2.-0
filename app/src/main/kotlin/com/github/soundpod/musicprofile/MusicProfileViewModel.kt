@@ -20,6 +20,63 @@ class MusicProfileViewModel(app: Application) : AndroidViewModel(app) {
         initialValue = MusicProfile()
     )
 
+    val isInitialized =
+        repo.isInitialized.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+
+    fun resetMusicDNA() {
+        viewModelScope.launch {
+            repo.resetProfile()
+
+            appContext.preferences.edit()
+                .remove(quickPicksCustomGenreKey)
+                .remove("dna_moods")
+                .apply()
+        }
+    }
+
+    fun initializeStarterDNA(
+        artists: Set<String>,
+        genres: Set<String>
+    ) {
+        val cleanArtists =
+            artists
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .take(5)
+                .toSet()
+
+        val cleanGenres =
+            genres
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .take(5)
+                .toSet()
+
+        viewModelScope.launch {
+            repo.initializeStarterProfile(
+                artists = cleanArtists,
+                genres = cleanGenres
+            )
+
+            val dnaQuery =
+                cleanGenres
+                    .take(3)
+                    .joinToString(" ")
+
+            appContext.preferences.edit()
+                .putString(
+                    quickPicksCustomGenreKey,
+                    dnaQuery
+                )
+                .apply()
+        }
+    }
+
     fun toggleGenre(genre: String) {
         viewModelScope.launch {
             val current = profile.value.favoriteGenres.toMutableSet()
