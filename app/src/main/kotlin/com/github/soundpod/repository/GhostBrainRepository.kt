@@ -79,7 +79,10 @@ class GhostBrainRepository {
 
         // Heavy rotation - actually recent (7 day) top artist
         val weekCutoff = now - (7L * 24 * 60 * 60 * 1000)
-        val recentArtists = runCatching { db.mostPlayedArtistsSince(weekCutoff, 3).first() }.getOrNull().orEmpty()
+        val recentArtists =
+            runCatching {
+                db.mostPlayedArtistsSince(weekCutoff, 8).first()
+            }.getOrNull().orEmpty()
         var heavyRotationArtist: String? = null
         if (recentArtists.isNotEmpty()) {
             val artist = recentArtists.first()
@@ -95,21 +98,62 @@ class GhostBrainRepository {
                 )
             }
 
-            // Rabbit hole - real multi-hop chain off this week's top artist
-            val chain = buildArtistChain(artist.name, maxHops = 4)
-            if (chain.size >= 2) {
-                val chainSongs = chain.flatMap { artistName ->
-                    mostPlayed.filter { it.artistsText == artistName }.take(3)
-                }
+            /*
+             * Rabbit Hole 2.0
+             *
+             * Heavy Rotation can still represent the week's #1 artist,
+             * but Rabbit Hole should not always begin there.
+             *
+             * Rotate through several genuinely recent artists and choose
+             * the first one that has a proven listening chain.
+             */
+            val rabbitHole =
+                recentArtists
+                    .shuffled()
+                    .mapNotNull { candidate ->
+                        val candidateChain =
+                            buildArtistChain(
+                                candidate.name,
+                                maxHops = 4
+                            )
+
+                        if (candidateChain.size >= 2) {
+                            candidateChain
+                        } else {
+                            null
+                        }
+                    }
+                    .firstOrNull()
+
+            if (rabbitHole != null) {
+                val chainSongs =
+                    rabbitHole
+                        .flatMap { artistName ->
+                            mostPlayed
+                                .filter {
+                                    it.artistsText == artistName
+                                }
+                                .shuffled()
+                                .take(3)
+                        }
+                        .distinctBy { it.id }
+
                 if (chainSongs.isNotEmpty()) {
-                    val journey = chain.drop(1).joinToString(", ")
-                    priorityCandidates += DiscoveryCardData(
-                        headline = "Every time you play ${chain.first()}, ${chain[1]} follows",
-                        source = "ghost_rabbit_hole",
-                        subtext = "You started with ${chain.first()}. Ghost Brain followed the pattern through $journey.",
-                        actionLabel = "Start Rabbit Hole",
-                        seedSongs = chainSongs
-                    )
+                    val journey =
+                        rabbitHole
+                            .drop(1)
+                            .joinToString(", ")
+
+                    priorityCandidates +=
+                        DiscoveryCardData(
+                            headline =
+                                "Every time you play ${rabbitHole.first()}, ${rabbitHole[1]} follows",
+                            source = "ghost_rabbit_hole",
+                            subtext =
+                                "You started with ${rabbitHole.first()}. Ghost Brain followed the pattern through $journey.",
+                            actionLabel = "Start Rabbit Hole",
+                            seedSongs = chainSongs
+                        )
                 }
             }
         }
@@ -266,7 +310,19 @@ class GhostBrainRepository {
         val skipWindow = now - (60L * 60 * 1000)
         val recentSkips = runCatching { db.recentSkipCount(skipWindow).first() }.getOrNull() ?: 0
         if (recentSkips >= 3) {
-            val comfortSongs = runCatching { db.highestCompletionSongs(5).first() }.getOrNull().orEmpty()
+            /*
+             * Never Miss / skip-recovery rotation.
+             *
+             * Pull a larger proven pool, then rotate five tracks from it
+             * instead of permanently showing the exact same top five.
+             */
+            val comfortSongs =
+                runCatching {
+                    db.highestCompletionSongs(30)
+                        .first()
+                        .shuffled()
+                        .take(5)
+                }.getOrNull().orEmpty()
             if (comfortSongs.isNotEmpty()) {
                 priorityCandidates += DiscoveryCardData(
                     headline = "Not feeling it today?",
