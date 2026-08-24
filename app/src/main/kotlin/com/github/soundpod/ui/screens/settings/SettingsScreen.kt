@@ -29,7 +29,16 @@ fun SettingsScreen(
     onOptionClick: (String) -> Unit
 ) {
     if (screenId == SettingsDestinations.MUSIC_DNA) {
-        com.github.soundpod.musicprofile.MusicProfileScreen(onBack = onBackClick)
+        com.github.soundpod.musicprofile.MusicProfileScreen(
+            onBack = onBackClick
+        )
+        return
+    }
+
+    if (screenId == SettingsDestinations.GHOST_WRAPPED) {
+        com.github.soundpod.wrapped.GhostWrappedScreen(
+            onBack = onBackClick
+        )
         return
     }
     val title = when (screenId) {
