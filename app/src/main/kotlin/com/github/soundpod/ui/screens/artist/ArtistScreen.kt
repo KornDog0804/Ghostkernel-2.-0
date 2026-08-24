@@ -65,6 +65,7 @@ fun ArtistScreen(
     onSettingsClick: () -> Unit,
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
+    onPlaylistClick: (String) -> Unit,
     viewModel: ArtistViewModel = viewModel(),
 ) {
     val playerPadding = LocalPlayerPadding.current
@@ -205,6 +206,8 @@ fun ArtistScreen(
                         ArtistTab.Overview -> ArtistOverviewContent(
                             youtubeArtistPage = artistPage,
                             onAlbumClick = onAlbumClick,
+                            onArtistClick = onArtistClick,
+                            onPlaylistClick = onPlaylistClick,
                             playerPadding = playerPadding
                         )
                         ArtistTab.Songs -> ArtistTracksPage(

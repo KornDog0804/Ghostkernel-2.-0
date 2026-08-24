@@ -61,4 +61,5 @@ object SettingsDestinations {
     const val ACCOUNT = "settings_account"
     const val LOGIN = "settings_login"
     const val MUSIC_DNA = "settings_music_dna"
+    const val GHOST_WRAPPED = "settings_ghost_wrapped"
 }

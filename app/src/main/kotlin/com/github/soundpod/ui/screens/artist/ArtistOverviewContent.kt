@@ -32,6 +32,8 @@ import com.github.soundpod.ui.components.NonQueuedMediaItemMenu
 import com.github.soundpod.ui.components.ShimmerHost
 import com.github.soundpod.ui.components.TextPlaceholder
 import com.github.soundpod.ui.items.AlbumItem
+import com.github.soundpod.ui.items.ArtistItem
+import com.github.soundpod.ui.items.PlaylistItem
 import com.github.soundpod.ui.items.ListItemPlaceholder
 import com.github.soundpod.ui.items.SongItem
 import com.github.soundpod.ui.styling.Dimensions
@@ -43,6 +45,8 @@ import com.github.soundpod.utils.forcePlayAtIndex
 internal fun ArtistOverviewContent(
     youtubeArtistPage: Innertube.ArtistPage?,
     onAlbumClick: (String) -> Unit,
+    onArtistClick: (String) -> Unit,
+    onPlaylistClick: (String) -> Unit,
     playerPadding: Dp,
 ) {
     Column(
@@ -77,6 +81,41 @@ internal fun ArtistOverviewContent(
                     onAlbumClick = onAlbumClick
                 )
             }
+
+            youtubeArtistPage.relatedArtists
+                ?.filter { it.key.isNotBlank() }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { artists ->
+                    Spacer(modifier = Modifier.height(Dimensions.spacer))
+                    ArtistRelatedSection(
+                        artists = artists,
+                        onArtistClick = onArtistClick
+                    )
+                }
+
+            youtubeArtistPage.featuredPlaylists
+                ?.filter { it.key.isNotBlank() }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { playlists ->
+                    Spacer(modifier = Modifier.height(Dimensions.spacer))
+                    ArtistPlaylistSection(
+                        title = "Featured On",
+                        playlists = playlists,
+                        onPlaylistClick = onPlaylistClick
+                    )
+                }
+
+            youtubeArtistPage.playlists
+                ?.filter { it.key.isNotBlank() }
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { playlists ->
+                    Spacer(modifier = Modifier.height(Dimensions.spacer))
+                    ArtistPlaylistSection(
+                        title = "Playlists",
+                        playlists = playlists,
+                        onPlaylistClick = onPlaylistClick
+                    )
+                }
 
             youtubeArtistPage.description?.let { description ->
                 ArtistDescriptionSection(description = description)
@@ -227,5 +266,75 @@ internal fun ArtistDescriptionSection(description: String) {
                 .alpha(Dimensions.MEDIUMOPACITY)
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp)
         )
+    }
+}
+
+
+@Composable
+internal fun ArtistRelatedSection(
+    artists: List<Innertube.ArtistItem>,
+    onArtistClick: (String) -> Unit
+) {
+    Text(
+        text = "Related Artists",
+        style = typography.titleMedium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp)
+    ) {
+        items(
+            items = artists.distinctBy { it.key },
+            key = { it.key }
+        ) { artist ->
+            ArtistItem(
+                modifier = Modifier.widthIn(max = 140.dp),
+                artist = artist,
+                onClick = {
+                    if (artist.key.isNotBlank()) {
+                        onArtistClick(artist.key)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+internal fun ArtistPlaylistSection(
+    title: String,
+    playlists: List<Innertube.PlaylistItem>,
+    onPlaylistClick: (String) -> Unit
+) {
+    Text(
+        text = title,
+        style = typography.titleMedium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = 8.dp)
+    ) {
+        items(
+            items = playlists.distinctBy { it.key },
+            key = { it.key }
+        ) { playlist ->
+            PlaylistItem(
+                modifier = Modifier.widthIn(max = 160.dp),
+                playlist = playlist,
+                onClick = {
+                    if (playlist.key.isNotBlank()) {
+                        onPlaylistClick(playlist.key)
+                    }
+                }
+            )
+        }
     }
 }

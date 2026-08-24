@@ -422,6 +422,75 @@ interface Database {
     @Query("SELECT COUNT (*) FROM Event")
     fun eventsCount(): Flow<Int>
 
+    // Ghost Wrapped
+    @Query("SELECT COALESCE(SUM(playTime), 0) FROM Event WHERE timestamp >= :since")
+    fun totalPlayTimeSince(since: Long): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM Event WHERE timestamp >= :since")
+    fun eventsCountSince(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(DISTINCT songId) FROM Event WHERE timestamp >= :since")
+    fun distinctSongsSince(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(DISTINCT artist) FROM Event WHERE timestamp >= :since AND artist IS NOT NULL")
+    fun distinctArtistsSince(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM Event WHERE timestamp >= :since AND skipped = 1")
+    fun skippedCountSince(since: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM Event WHERE timestamp >= :since AND completedPercent >= 85")
+    fun completedCountSince(since: Long): Flow<Int>
+
+    @Query("""
+        SELECT artist AS name,
+               COUNT(*) AS playCount,
+               SUM(playTime) AS totalPlayTime
+        FROM Event
+        WHERE timestamp >= :since
+          AND artist IS NOT NULL
+        GROUP BY artist
+        ORDER BY totalPlayTime DESC
+        LIMIT :limit
+    """)
+    fun wrappedTopArtists(
+        since: Long,
+        limit: Int
+    ): Flow<List<ArtistPlayStat>>
+
+    @Query("""
+        SELECT album AS name,
+               COUNT(*) AS playCount,
+               SUM(playTime) AS totalPlayTime
+        FROM Event
+        WHERE timestamp >= :since
+          AND album IS NOT NULL
+          AND TRIM(album) != ''
+        GROUP BY album
+        ORDER BY totalPlayTime DESC
+        LIMIT :limit
+    """)
+    fun wrappedTopAlbums(
+        since: Long,
+        limit: Int
+    ): Flow<List<AlbumPlayStat>>
+
+    @Query("""
+        SELECT songId,
+               MAX(title) AS title,
+               MAX(artist) AS artist,
+               COUNT(*) AS playCount,
+               SUM(playTime) AS totalPlayTime
+        FROM Event
+        WHERE timestamp >= :since
+        GROUP BY songId
+        ORDER BY totalPlayTime DESC
+        LIMIT :limit
+    """)
+    fun wrappedTopSongs(
+        since: Long,
+        limit: Int
+    ): Flow<List<SongPlayStat>>
+
     @Query("DELETE FROM Event")
     fun clearEvents()
 
@@ -657,6 +726,13 @@ interface Database {
 }
 
 data class ArtistPlayStat(val name: String, val playCount: Int, val totalPlayTime: Long)
+data class SongPlayStat(
+    val songId: String,
+    val title: String?,
+    val artist: String?,
+    val playCount: Int,
+    val totalPlayTime: Long
+)
 data class AlbumPlayStat(val name: String, val playCount: Int, val totalPlayTime: Long)
 data class CoOccurrenceStat(val name: String, val coOccurrenceCount: Int)
 

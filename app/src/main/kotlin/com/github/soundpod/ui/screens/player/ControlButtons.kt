@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Speaker
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material3.CircularProgressIndicator
@@ -791,6 +792,40 @@ fun PlayerMiddleControl(
             Icon(
                 imageVector = Icons.Outlined.Share,
                 contentDescription = "Share",
+                tint = colorPalette.iconColor,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        AnimatedIconButton(
+            onClick = {
+                val shown =
+                    if (android.os.Build.VERSION.SDK_INT >= 34) {
+                        runCatching {
+                            android.media.MediaRouter2
+                                .getInstance(ctx)
+                                .showSystemOutputSwitcher()
+                        }.getOrDefault(false)
+                    } else {
+                        false
+                    }
+
+                if (!shown) {
+                    try {
+                        ctx.startActivity(
+                            Intent(
+                                android.provider.Settings.ACTION_BLUETOOTH_SETTINGS
+                            )
+                        )
+                    } catch (_: Throwable) {
+                        ctx.toast("Unable to open audio output settings")
+                    }
+                }
+            },
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Speaker,
+                contentDescription = "Audio Output",
                 tint = colorPalette.iconColor,
                 modifier = Modifier.size(24.dp)
             )

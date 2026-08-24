@@ -94,6 +94,28 @@ var isAndroidAutoEnabled by remember {
             )
 
             SettingsColumn(
+                icon = IconSource.Vector(Icons.Outlined.Stars),
+                title = "Ghost Wrapped",
+                description = "Your real listening stats and top music",
+                onClick = {
+                    val intent =
+                        Intent(
+                            context,
+                            Class.forName(
+                                "com.github.soundpod.SettingsActivity"
+                            )
+                        ).apply {
+                            putExtra(
+                                "SCREEN_ID",
+                                SettingsDestinations.GHOST_WRAPPED
+                            )
+                        }
+
+                    context.startActivity(intent)
+                }
+            )
+
+            SettingsColumn(
                 icon = IconSource.Vector(Icons.Outlined.BugReport),
                 title = "Share Debug Log",
                 description = "Send crash logs to help fix a bug",
