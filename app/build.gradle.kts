@@ -24,7 +24,7 @@ extensions.configure<ApplicationExtension>("android") {
         minSdk = 24
         targetSdk = 37
         val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 0
-        versionCode = 20000 + ciRunNumber
+        versionCode = 29840000 + ciRunNumber
         versionName = "2.0.0-b$ciRunNumber"
 
         val kornOsSyncUrl = System.getenv("KORNOS_SYNC_URL").orEmpty()
