@@ -37,6 +37,8 @@ import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import com.github.innertube.models.NavigationEndpoint
 import com.github.soundpod.db
 import com.github.soundpod.query
+import com.github.soundpod.repository.GhostBrainRepository
+import com.github.soundpod.utils.asMediaItem
 import com.github.soundpod.utils.InvincibleService
 import com.github.soundpod.utils.broadCastPendingIntent
 import com.github.soundpod.utils.intent
@@ -107,6 +109,17 @@ class PlayerService : InvincibleService(), Player.Listener,
     private lateinit var preCacheManager: PreCacheManager
 
     private val coroutineScope = CoroutineScope(Dispatchers.IO) + SupervisorJob()
+
+    @Volatile
+    private var rabbitHoleActive = false
+
+    @Volatile
+    private var rabbitHoleRefillInFlight = false
+
+    private val ghostBrainRepository by lazy {
+        GhostBrainRepository()
+    }
+
 
     private var isPersistentQueueEnabled = false
     private var isShowingThumbnailInLockscreen = true
@@ -322,6 +335,8 @@ class PlayerService : InvincibleService(), Player.Listener,
         
         // Trigger prefetch here
         prefetchNextTrack()
+
+        maybeExtendRabbitHole()
         
         mediaItem?.mediaId?.let { videoId ->
             coroutineScope.launch {
@@ -344,6 +359,122 @@ class PlayerService : InvincibleService(), Player.Listener,
         if (reason == Player.TIMELINE_CHANGE_REASON_PLAYLIST_CHANGED || reason == Player.TIMELINE_CHANGE_REASON_SOURCE_UPDATE) {
             mediaSessionManager.updateQueue(timeline)
             prefetchNextTrack()
+        }
+    }
+
+
+    private fun maybeExtendRabbitHole() {
+        if (!rabbitHoleActive) {
+            rabbitHoleRefillInFlight = false
+            return
+        }
+
+        if (rabbitHoleRefillInFlight) {
+            return
+        }
+
+        val currentIndex =
+            player.currentMediaItemIndex
+
+        val mediaItemCount =
+            player.mediaItemCount
+
+        if (
+            currentIndex < 0 ||
+            mediaItemCount <= 0
+        ) {
+            return
+        }
+
+        val remaining =
+            mediaItemCount -
+                currentIndex -
+                1
+
+        if (remaining > 3) {
+            return
+        }
+
+        rabbitHoleRefillInFlight = true
+
+        Log.d(
+            "GhostKernel-Rabbit",
+            "Rabbit refill requested: " +
+                "remaining=$remaining " +
+                "queue=$mediaItemCount"
+        )
+
+        coroutineScope.launch {
+            try {
+                val card =
+                    ghostBrainRepository
+                        .getDiscoveryCard(
+                            requestedSource =
+                                "ghost_rabbit_hole"
+                        )
+                        ?: run {
+                            Log.d(
+                                "GhostKernel-Rabbit",
+                                "No Rabbit continuation card available"
+                            )
+                            return@launch
+                        }
+
+                withContext(Dispatchers.Main) {
+                    val existingIds =
+                        mutableSetOf<String>()
+
+                    for (
+                        index in
+                        0 until player.mediaItemCount
+                    ) {
+                        existingIds +=
+                            player
+                                .getMediaItemAt(index)
+                                .mediaId
+                    }
+
+                    val continuation =
+                        card.seedSongs
+                            .filter { song ->
+                                song.id !in existingIds
+                            }
+                            .distinctBy { song ->
+                                song.id
+                            }
+                            .map { song ->
+                                song.asMediaItem
+                            }
+
+                    if (continuation.isNotEmpty()) {
+                        player.addMediaItems(
+                            player.mediaItemCount,
+                            continuation
+                        )
+
+                        Log.d(
+                            "GhostKernel-Rabbit",
+                            "Extended Rabbit Hole by " +
+                                "${continuation.size} tracks; " +
+                                "queue=${player.mediaItemCount}"
+                        )
+                    } else {
+                        Log.d(
+                            "GhostKernel-Rabbit",
+                            "Rabbit continuation contained " +
+                                "no unseen tracks"
+                        )
+                    }
+                }
+            } catch (throwable: Throwable) {
+                Log.e(
+                    "GhostKernel-Rabbit",
+                    "Rabbit Hole refill failed",
+                    throwable
+                )
+            } finally {
+                rabbitHoleRefillInFlight = false
+            }
         }
     }
 
@@ -669,6 +800,19 @@ class PlayerService : InvincibleService(), Player.Listener,
         fun setupRadio(endpoint: NavigationEndpoint.Endpoint.Watch?) = radioManager.setupRadio(endpoint)
         fun playRadio(endpoint: NavigationEndpoint.Endpoint.Watch?) = radioManager.playRadio(endpoint)
         fun stopRadio() = radioManager.stop()
+
+        fun setRabbitHoleActive(active: Boolean) {
+            rabbitHoleActive = active
+
+            if (!active) {
+                rabbitHoleRefillInFlight = false
+            }
+
+            Log.d(
+                "GhostKernel-Rabbit",
+                "Rabbit Hole active=$active"
+            )
+        }
     }
 
     private fun likeAction() = mediaItemState.value?.let { mediaItem ->

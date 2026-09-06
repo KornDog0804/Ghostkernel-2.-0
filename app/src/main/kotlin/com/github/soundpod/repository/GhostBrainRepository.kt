@@ -99,13 +99,10 @@ class GhostBrainRepository {
             }
 
             /*
-             * Rabbit Hole 2.0
+             * Rabbit Hole 4.3
              *
-             * Heavy Rotation can still represent the week's #1 artist,
-             * but Rabbit Hole should not always begin there.
-             *
-             * Rotate through several genuinely recent artists and choose
-             * the first one that has a proven listening chain.
+             * Follow proven listening relationships, but build a deeper,
+             * better-spaced queue for the learned artist chain.
              */
             val rabbitHole =
                 recentArtists
@@ -126,31 +123,64 @@ class GhostBrainRepository {
                     .firstOrNull()
 
             if (rabbitHole != null) {
-                val chainSongs =
+                val cleanRabbitHole =
                     rabbitHole
-                        .flatMap { artistName ->
-                            mostPlayed
-                                .filter {
-                                    it.artistsText == artistName
-                                }
-                                .shuffled()
-                                .take(3)
-                        }
-                        .distinctBy { it.id }
+                        .map(::cleanRabbitArtistName)
+                        .filter { it.isNotBlank() }
+                        .distinctBy(::normalizeRabbitArtist)
 
-                if (chainSongs.isNotEmpty()) {
+                val usedIds = mutableSetOf<String>()
+
+                val artistPools =
+                    cleanRabbitHole.map { artistName ->
+                        songsForRabbitArtist(
+                            artistName = artistName,
+                            historySongs = mostPlayed,
+                            excludedIds = usedIds
+                        )
+                            .also { songs ->
+                                usedIds += songs.map { it.id }
+                            }
+                            .toMutableList()
+                    }
+
+                val roundRobin = mutableListOf<Song>()
+                var addedSomething = true
+
+                while (addedSomething && roundRobin.size < 24) {
+                    addedSomething = false
+
+                    artistPools.forEach { pool ->
+                        if (pool.isNotEmpty() && roundRobin.size < 24) {
+                            roundRobin += pool.removeAt(0)
+                            addedSomething = true
+                        }
+                    }
+                }
+
+                val chainSongs =
+                    spaceArtists(
+                        roundRobin.distinctBy { it.id },
+                        preferredGap = 3
+                    )
+                        .take(24)
+
+                if (
+                    chainSongs.isNotEmpty() &&
+                    cleanRabbitHole.size >= 2
+                ) {
                     val journey =
-                        rabbitHole
+                        cleanRabbitHole
                             .drop(1)
                             .joinToString(", ")
 
                     priorityCandidates +=
                         DiscoveryCardData(
                             headline =
-                                "Every time you play ${rabbitHole.first()}, ${rabbitHole[1]} follows",
+                                "Every time you play ${cleanRabbitHole.first()}, ${cleanRabbitHole[1]} follows",
                             source = "ghost_rabbit_hole",
                             subtext =
-                                "You started with ${rabbitHole.first()}. Ghost Brain followed the pattern through $journey.",
+                                "You started with ${cleanRabbitHole.first()}. Ghost Brain followed the pattern through $journey.",
                             actionLabel = "Start Rabbit Hole",
                             seedSongs = chainSongs
                         )
@@ -408,6 +438,333 @@ class GhostBrainRepository {
         } else {
             priorityPool.randomOrNull() ?: candidatePool.randomOrNull()
         }
+    }
+
+
+    private fun cleanRabbitArtistName(
+        value: String
+    ): String {
+        val parts =
+            value
+                .split("•")
+                .map { it.trim() }
+                .filter { part ->
+                    part.isNotBlank() &&
+                        part.any { it.isLetterOrDigit() }
+                }
+
+        if (parts.size <= 1) {
+            return value.trim()
+        }
+
+        val usefulParts =
+            parts.filterNot { part ->
+                val normalized =
+                    part
+                        .lowercase()
+                        .replace(
+                            Regex("[^a-z0-9]+"),
+                            " "
+                        )
+                        .trim()
+
+                normalized.isBlank() ||
+                    normalized == "and" ||
+                    normalized == "records" ||
+                    normalized.endsWith(" records") ||
+                    normalized == "music" ||
+                    normalized.endsWith(" music") ||
+                    normalized.endsWith(" topic") ||
+                    normalized.endsWith(" vevo")
+            }
+
+        return when {
+            usefulParts.isEmpty() -> value.trim()
+            usefulParts.size == 1 -> usefulParts.first()
+            usefulParts.size < parts.size -> usefulParts.last()
+            else -> value.trim()
+        }
+    }
+
+    private fun normalizeRabbitArtist(
+        value: String
+    ): String =
+        cleanRabbitArtistName(value)
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+
+    private fun rabbitArtistMatches(
+        song: Song,
+        artistName: String
+    ): Boolean {
+        val targetArtist =
+            normalizeRabbitArtist(artistName)
+
+        val songArtist =
+            normalizeRabbitArtist(
+                song.artistsText.orEmpty()
+            )
+
+        return targetArtist.isNotBlank() &&
+            songArtist.isNotBlank() &&
+            (
+                songArtist == targetArtist ||
+                    songArtist.contains(targetArtist) ||
+                    targetArtist.contains(songArtist)
+            )
+    }
+
+    private suspend fun songsForRabbitArtist(
+        artistName: String,
+        historySongs: List<Song>,
+        excludedIds: Set<String>
+    ): List<Song> {
+
+        val targetArtist =
+            normalizeRabbitArtist(artistName)
+
+        val databaseSongs =
+            runCatching {
+                db.songsForArtist(
+                    artistName,
+                    12
+                ).first()
+            }.getOrDefault(emptyList())
+
+        val localSongs =
+            (historySongs + databaseSongs)
+                .filter { song ->
+                    song.id !in excludedIds &&
+                        rabbitArtistMatches(
+                            song,
+                            artistName
+                        )
+                }
+                .distinctBy { song ->
+                    val title =
+                        song.title
+                            .lowercase()
+                            .replace(
+                                Regex("[^a-z0-9]+"),
+                                " "
+                            )
+                            .trim()
+
+                    "${normalizeRabbitArtist(song.artistsText.orEmpty())}|$title"
+                }
+                .shuffled()
+                .take(4)
+                .map { song ->
+                    song.copy(
+                        artistsText =
+                            cleanRabbitArtistName(
+                                artistName
+                            )
+                    )
+                }
+
+        if (localSongs.size >= 4) {
+            return localSongs
+        }
+
+        val searchQueries =
+            listOf(
+                "$artistName songs",
+                artistName,
+                "$artistName official audio"
+            )
+
+        val onlineSongs =
+            mutableListOf<Song>()
+
+        for (query in searchQueries) {
+            if (onlineSongs.size >= 10) {
+                break
+            }
+
+            val results =
+                runCatching {
+                    Innertube.searchPage(
+                        query = query,
+                        params =
+                            Innertube.SearchFilter.Song.value,
+                        fromMusicShelfRendererContent =
+                            Innertube.SongItem.Companion::from
+                    )
+                        ?.getOrNull()
+                        ?.items
+                        .orEmpty()
+                }.getOrDefault(emptyList())
+
+            results.forEach { item ->
+                val authorNames =
+                    item.authors
+                        ?.mapNotNull { it.name }
+                        .orEmpty()
+
+                val authorMatches =
+                    authorNames.any { authorName ->
+                        val normalizedAuthor =
+                            normalizeRabbitArtist(
+                                authorName
+                            )
+
+                        normalizedAuthor.isNotBlank() &&
+                            (
+                                normalizedAuthor ==
+                                    targetArtist ||
+                                    normalizedAuthor.contains(
+                                        targetArtist
+                                    ) ||
+                                    targetArtist.contains(
+                                        normalizedAuthor
+                                    )
+                            )
+                    }
+
+                if (!authorMatches) {
+                    return@forEach
+                }
+
+                val mediaItem =
+                    item.asMediaItem
+
+                if (mediaItem.mediaId in excludedIds) {
+                    return@forEach
+                }
+
+                val title =
+                    mediaItem
+                        .mediaMetadata
+                        .title
+                        ?.toString()
+                        ?.trim()
+                        .orEmpty()
+
+                if (title.isBlank()) {
+                    return@forEach
+                }
+
+                onlineSongs +=
+                    Song(
+                        id = mediaItem.mediaId,
+                        title = title,
+                        artistsText =
+                            cleanRabbitArtistName(
+                                artistName
+                            ),
+                        durationText =
+                            item.durationText,
+                        thumbnailUrl =
+                            mediaItem
+                                .mediaMetadata
+                                .artworkUri
+                                ?.toString()
+                    )
+            }
+        }
+
+        return (localSongs + onlineSongs)
+            .distinctBy { song ->
+                val normalizedTitle =
+                    song.title
+                        .lowercase()
+                        .replace(
+                            Regex("[^a-z0-9]+"),
+                            " "
+                        )
+                        .trim()
+
+                val normalizedArtist =
+                    normalizeRabbitArtist(
+                        song.artistsText.orEmpty()
+                    )
+
+                "$normalizedArtist|$normalizedTitle"
+            }
+            .take(4)
+    }
+
+    private fun spaceArtists(
+        songs: List<Song>,
+        preferredGap: Int = 3
+    ): List<Song> {
+
+        val remaining =
+            songs
+                .distinctBy { it.id }
+                .shuffled()
+                .toMutableList()
+
+        val result =
+            mutableListOf<Song>()
+
+        while (remaining.isNotEmpty()) {
+            val lastArtist =
+                result
+                    .lastOrNull()
+                    ?.artistsText
+                    ?.let(
+                        ::normalizeRabbitArtist
+                    )
+
+            val recentArtists =
+                result
+                    .takeLast(preferredGap)
+                    .mapNotNull { song ->
+                        song.artistsText
+                            ?.let(
+                                ::normalizeRabbitArtist
+                            )
+                            ?.takeIf {
+                                it.isNotBlank()
+                            }
+                    }
+                    .toSet()
+
+            val preferredIndex =
+                remaining.indexOfFirst { song ->
+                    val artist =
+                        normalizeRabbitArtist(
+                            song.artistsText.orEmpty()
+                        )
+
+                    artist.isNotBlank() &&
+                        artist != lastArtist &&
+                        artist !in recentArtists
+                }
+
+            val fallbackIndex =
+                remaining.indexOfFirst { song ->
+                    val artist =
+                        normalizeRabbitArtist(
+                            song.artistsText.orEmpty()
+                        )
+
+                    artist.isNotBlank() &&
+                        artist != lastArtist
+                }
+
+            val chosenIndex =
+                when {
+                    preferredIndex >= 0 ->
+                        preferredIndex
+
+                    fallbackIndex >= 0 ->
+                        fallbackIndex
+
+                    else ->
+                        0
+                }
+
+            result +=
+                remaining.removeAt(
+                    chosenIndex
+                )
+        }
+
+        return result
     }
 
     private suspend fun buildArtistChain(seedArtist: String, maxHops: Int): List<String> {

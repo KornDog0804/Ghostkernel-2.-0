@@ -114,6 +114,11 @@ fun DiscoveryCard() {
             Button(
                 onClick = {
                     binder?.stopRadio()
+
+                    binder?.setRabbitHoleActive(
+                        card.source == "ghost_rabbit_hole"
+                    )
+
                     val ghostMediaItems =
                         card.seedSongs.map { song ->
                             song.asMediaItem.withGhostSource(card.source)
@@ -123,10 +128,15 @@ fun DiscoveryCard() {
                         ghostMediaItems,
                         0
                     )
-                    card.seedSongs.lastOrNull()?.let { lastSong ->
-                        binder?.setupRadio(
-                            NavigationEndpoint.Endpoint.Watch(videoId = lastSong.id)
-                        )
+
+                    if (card.source != "ghost_rabbit_hole") {
+                        card.seedSongs.lastOrNull()?.let { lastSong ->
+                            binder?.setupRadio(
+                                NavigationEndpoint.Endpoint.Watch(
+                                    videoId = lastSong.id
+                                )
+                            )
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
