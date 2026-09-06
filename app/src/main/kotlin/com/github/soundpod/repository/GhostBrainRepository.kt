@@ -386,7 +386,7 @@ class GhostBrainRepository {
                             title = mediaItem.mediaMetadata.title.toString(),
                             artistsText = mediaItem.mediaMetadata.artist.toString(),
                             durationText = null,
-                            thumbnailUrl = mediaItem.mediaMetadata.artworkUri.toString()
+                            thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString()
                         )
                     }
                 }.getOrNull().orEmpty()

@@ -135,7 +135,7 @@ class PlayerMediaSourceProvider(
             val fastResult: Pair<Uri, String?>? = runCatching {
                 if (!YouTubeSessionManager.isSessionReady.value) {
                     runBlocking {
-                        withTimeoutOrNull(5000L) {
+                        withTimeoutOrNull(750L) {
                             YouTubeSessionManager.isSessionReady.first { it }
                         }
                     }

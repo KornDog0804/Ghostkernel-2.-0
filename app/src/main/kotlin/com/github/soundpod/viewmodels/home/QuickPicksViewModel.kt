@@ -106,7 +106,7 @@ class QuickPicksViewModel : ViewModel() {
                                 title = mediaItem.mediaMetadata.title.toString(),
                                 artistsText = mediaItem.mediaMetadata.artist.toString(),
                                 durationText = null,
-                                thumbnailUrl = mediaItem.mediaMetadata.artworkUri.toString()
+                                thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString()
                             )
                         } ?: emptyList()
                     }
@@ -122,7 +122,7 @@ class QuickPicksViewModel : ViewModel() {
                                     title = mediaItem.mediaMetadata.title.toString(),
                                     artistsText = mediaItem.mediaMetadata.artist.toString(),
                                     durationText = null,
-                                    thumbnailUrl = mediaItem.mediaMetadata.artworkUri.toString()
+                                    thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString()
                                 )
                             } ?: emptyList()
                         }
@@ -135,7 +135,7 @@ class QuickPicksViewModel : ViewModel() {
                                 title = mediaItem.mediaMetadata.title.toString(),
                                 artistsText = mediaItem.mediaMetadata.artist.toString(),
                                 durationText = null,
-                                thumbnailUrl = mediaItem.mediaMetadata.artworkUri.toString()
+                                thumbnailUrl = mediaItem.mediaMetadata.artworkUri?.toString()
                             )
                         } ?: getSeedSongsFlow(quickPicksSource, 3).first()
                     }
