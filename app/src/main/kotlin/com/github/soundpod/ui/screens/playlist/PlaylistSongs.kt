@@ -9,11 +9,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.util.UnstableApi
 import com.github.innertube.Innertube
+import com.github.innertube.requests.removeVideoFromYouTubePlaylist
 import com.github.soundpod.LocalPlayerPadding
 import com.github.soundpod.LocalPlayerServiceBinder
 import com.github.soundpod.R
@@ -27,6 +29,7 @@ import com.github.soundpod.ui.items.SongItem
 import com.github.soundpod.utils.asMediaItem
 import com.github.soundpod.utils.enqueue
 import com.github.soundpod.utils.forcePlayAtIndex
+import kotlinx.coroutines.launch
 
 @ExperimentalFoundationApi
 @ExperimentalAnimationApi
@@ -34,12 +37,15 @@ import com.github.soundpod.utils.forcePlayAtIndex
 @Composable
 fun PlaylistSongs(
     playlistPage: Innertube.PlaylistOrAlbumPage?,
+    browseId: String,
+    onPlaylistChanged: () -> Unit,
     onGoToAlbum: (String) -> Unit,
     onGoToArtist: (String) -> Unit,
 ) {
     val binder = LocalPlayerServiceBinder.current
     val menuState = LocalMenuState.current
     val playerPadding = LocalPlayerPadding.current
+    val scope = rememberCoroutineScope()
 
     androidx.compose.runtime.LaunchedEffect(playlistPage) {
         playlistPage?.songsPage?.items?.take(5)?.map { it.key }?.let { videoIds ->
@@ -74,9 +80,30 @@ fun PlaylistSongs(
                     },
                     onLongClick = {
                         menuState.display {
+                            val playlistSetVideoId =
+                                song.info?.endpoint?.playlistSetVideoId
+
                             NonQueuedMediaItemMenu(
                                 onDismiss = menuState::hide,
                                 mediaItem = song.asMediaItem,
+                                onRemoveFromPlaylist =
+                                    playlistSetVideoId?.let { setVideoId ->
+                                        {
+                                            scope.launch {
+                                                val removeResult =
+                                                    Innertube.removeVideoFromYouTubePlaylist(
+                                                        playlistId = browseId,
+                                                        videoId = song.key,
+                                                        setVideoId = setVideoId
+                                                    )
+
+                                                if (removeResult?.isSuccess == true) {
+                                                    menuState.hide()
+                                                    onPlaylistChanged()
+                                                }
+                                            }
+                                        }
+                                    },
                                 onGoToAlbum = onGoToAlbum,
                                 onGoToArtist = onGoToArtist
                             )

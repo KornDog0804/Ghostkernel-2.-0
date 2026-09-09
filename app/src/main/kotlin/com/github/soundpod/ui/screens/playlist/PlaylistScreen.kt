@@ -196,6 +196,19 @@ fun PlaylistScreen(
         content = {
             PlaylistSongs(
                 playlistPage = playlistPage,
+                browseId = browseId,
+                onPlaylistChanged = {
+                    playlistPage = null
+
+                    scope.launch {
+                        Innertube.playlistPage(browseId = browseId)
+                            ?.completed()
+                            ?.getOrNull()
+                            ?.let { refreshedPage ->
+                                playlistPage = refreshedPage
+                            }
+                    }
+                },
                 onGoToAlbum = onGoToAlbum,
                 onGoToArtist = onGoToArtist
             )

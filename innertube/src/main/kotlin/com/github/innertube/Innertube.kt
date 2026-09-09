@@ -117,7 +117,7 @@ object Innertube {
         }
     }
     
-    private fun generateSapisidHash(cookies: String): String? {
+    internal fun generateSapisidHash(cookies: String): String? {
         val parts = cookies.split("; ")
         val sapisid = parts.find { it.startsWith("__Secure-3PAPISID=") }
             ?.substringAfter("__Secure-3PAPISID=")
@@ -187,6 +187,9 @@ object Innertube {
     internal const val QUEUE = "/youtubei/v1/music/get_queue"
     internal const val SEARCH = "/youtubei/v1/search"
     internal const val SEARCH_SUGGESTIONS = "/youtubei/v1/music/get_search_suggestions"
+    internal const val PLAYLIST_CREATE = "/youtubei/v1/playlist/create"
+    internal const val PLAYLIST_EDIT = "/youtubei/v1/browse/edit_playlist"
+    internal const val PLAYLIST_DELETE = "/youtubei/v1/playlist/delete"
 
     internal const val MUSIC_RESPONSIVE_LIST_ITEM_RENDERER_MASK =
         "musicResponsiveListItemRenderer(flexColumns,fixedColumns,thumbnail,navigationEndpoint)"

@@ -38,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -50,7 +51,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.github.innertube.Innertube
 import com.github.innertube.models.NavigationEndpoint
+import com.github.innertube.requests.addVideoToYouTubePlaylist
+import com.github.innertube.requests.createYouTubePlaylist
 import com.github.soundpod.LocalPlayerServiceBinder
 import com.github.soundpod.R
 import com.github.soundpod.db
@@ -70,7 +75,9 @@ import com.github.soundpod.utils.forcePlay
 import com.github.soundpod.utils.playlistSortByKey
 import com.github.soundpod.utils.playlistSortOrderKey
 import com.github.soundpod.utils.rememberPreference
+import com.github.soundpod.viewmodels.LibraryViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -285,6 +292,30 @@ fun MediaItemMenu(
         mutableStateOf(false)
     }
 
+    var isViewingYouTubePlaylists by remember {
+        mutableStateOf(false)
+    }
+
+    var isCreatingYouTubePlaylist by rememberSaveable {
+        mutableStateOf(false)
+    }
+
+    val youtubeLibraryViewModel: LibraryViewModel = viewModel()
+    val youtubePlaylists by youtubeLibraryViewModel.playlists.collectAsState()
+    val youtubePlaylistsLoading by youtubeLibraryViewModel.isLoading.collectAsState()
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(isViewingYouTubePlaylists) {
+        if (
+            isViewingYouTubePlaylists &&
+            Innertube.isLoggedIn &&
+            youtubePlaylists.isEmpty() &&
+            !youtubePlaylistsLoading
+        ) {
+            youtubeLibraryViewModel.load()
+        }
+    }
+
     var height by remember {
         mutableStateOf(0.dp)
     }
@@ -321,7 +352,7 @@ fun MediaItemMenu(
     }
 
     AnimatedContent(
-        targetState = isViewingPlaylists,
+        targetState = isViewingPlaylists || isViewingYouTubePlaylists,
         transitionSpec = {
             val animationSpec = tween<IntOffset>(400)
             val slideDirection =
@@ -332,7 +363,7 @@ fun MediaItemMenu(
         },
         label = ""
     ) { currentIsViewingPlaylists ->
-        if (currentIsViewingPlaylists) {
+        if (currentIsViewingPlaylists && isViewingPlaylists) {
             val sortBy by rememberPreference(playlistSortByKey, PlaylistSortBy.DateAdded)
             val sortOrder by rememberPreference(playlistSortOrderKey, SortOrder.Descending)
 
@@ -390,7 +421,7 @@ fun MediaItemMenu(
                             )
                         }
                     }
-                }
+            }
 
                 onAddToPlaylist?.let { onAddToPlaylist ->
                     playlistPreviews.forEach { playlistPreview ->
@@ -405,6 +436,110 @@ fun MediaItemMenu(
                             onClick = {
                                 onDismiss()
                                 onAddToPlaylist(playlistPreview.playlist, playlistPreview.songCount)
+                            }
+                        )
+                    }
+                }
+            }
+        } else if (currentIsViewingPlaylists && isViewingYouTubePlaylists) {
+            if (isCreatingYouTubePlaylist) {
+                TextFieldDialog(
+                    title = "New YouTube Playlist",
+                    hintText = "Playlist name",
+                    onDismiss = {
+                        isCreatingYouTubePlaylist = false
+                    },
+                    onDone = { text ->
+                        if (text.isNotBlank()) {
+                            scope.launch {
+                                val createdPlaylistId =
+                                    Innertube.createYouTubePlaylist(text)
+                                        ?.getOrNull()
+
+                                if (createdPlaylistId != null) {
+                                    val addResult =
+                                        Innertube.addVideoToYouTubePlaylist(
+                                            playlistId = createdPlaylistId,
+                                            videoId = mediaItem.mediaId
+                                        )
+
+                                    if (addResult?.isSuccess == true) {
+                                        youtubeLibraryViewModel.load()
+                                        onDismiss()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
+            }
+
+            BackHandler {
+                isViewingYouTubePlaylists = false
+            }
+
+            Menu(
+                modifier = modifier.requiredHeight(height)
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                ) {
+                    IconButton(
+                        onClick = {
+                            isViewingYouTubePlaylists = false
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = null
+                        )
+                    }
+
+                    Text(
+                        text = "YouTube Playlists",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    FilledTonalButton(
+                        onClick = {
+                            isCreatingYouTubePlaylist = true
+                        }
+                    ) {
+                        Text("New")
+                    }
+                }
+
+                if (
+                    youtubePlaylistsLoading &&
+                    youtubePlaylists.isEmpty()
+                ) {
+                    Text(
+                        text = "Loading your YouTube playlists…",
+                        modifier = Modifier.padding(20.dp)
+                    )
+                } else {
+                    youtubePlaylists.forEach { playlist ->
+                        MenuEntry(
+                            icon = Icons.AutoMirrored.Outlined.QueueMusic,
+                            text = playlist.title,
+                            secondaryText = "YouTube • Account playlist",
+                            onClick = {
+                                scope.launch {
+                                    val addResult =
+                                        Innertube.addVideoToYouTubePlaylist(
+                                            playlistId = playlist.id,
+                                            videoId = mediaItem.mediaId
+                                        )
+
+                                    if (addResult?.isSuccess == true) {
+                                        youtubeLibraryViewModel.load()
+                                        onDismiss()
+                                    }
+                                }
                             }
                         )
                     }
@@ -489,8 +624,30 @@ fun MediaItemMenu(
                 if (onAddToPlaylist != null) {
                     MenuEntry(
                         icon = Icons.AutoMirrored.Outlined.PlaylistAdd,
-                        text = stringResource(id = R.string.add_to_playlist),
-                        onClick = { isViewingPlaylists = true },
+                        text = "Add to Ghost playlist",
+                        secondaryText = "Stored inside GhostKernel",
+                        onClick = {
+                            isViewingYouTubePlaylists = false
+                            isViewingPlaylists = true
+                        },
+                        trailingContent = {
+                            Icon(
+                                imageVector = Icons.Outlined.ChevronRight,
+                                contentDescription = null
+                            )
+                        }
+                    )
+                }
+
+                if (Innertube.isLoggedIn) {
+                    MenuEntry(
+                        icon = Icons.AutoMirrored.Outlined.QueueMusic,
+                        text = "Add to YouTube playlist",
+                        secondaryText = "Syncs with your YouTube Music account",
+                        onClick = {
+                            isViewingPlaylists = false
+                            isViewingYouTubePlaylists = true
+                        },
                         trailingContent = {
                             Icon(
                                 imageVector = Icons.Outlined.ChevronRight,
