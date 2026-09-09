@@ -40,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -74,6 +75,7 @@ import com.github.soundpod.utils.quickPicksCustomGenreKey
 import com.github.soundpod.utils.quickPicksSourceKey
 import com.github.soundpod.utils.rememberPreference
 import com.github.soundpod.viewmodels.home.QuickPicksViewModel
+import com.github.soundpod.viewmodels.home.YouTubeHomeViewModel
 import java.io.IOException
 
 @SuppressLint("ConfigurationScreenWidthHeight")
@@ -92,6 +94,8 @@ fun QuickPicks(
     val playerPadding = LocalPlayerPadding.current
 
     val viewModel: QuickPicksViewModel = viewModel()
+    val youtubeHomeViewModel: YouTubeHomeViewModel = viewModel()
+
     val quickPicksSource by rememberPreference(quickPicksSourceKey, QuickPicksSource.Trending)
     val quickPicksCustomGenre by rememberPreference(quickPicksCustomGenreKey, "Psaltic music")
 
@@ -107,6 +111,10 @@ fun QuickPicks(
             quickPicksSource = quickPicksSource,
             forceRefresh = quickPicksSource == QuickPicksSource.Custom
         )
+    }
+
+    LaunchedEffect(Unit) {
+        youtubeHomeViewModel.load()
     }
 
     LaunchedEffect(viewModel.relatedPageResult) {
@@ -212,6 +220,184 @@ fun QuickPicks(
                     }
                 }
             }
+
+            youtubeHomeViewModel.homePageResult
+                ?.getOrNull()
+                ?.sections
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { youtubeSections ->
+
+                    Spacer(modifier = Modifier.height(28.dp))
+
+                    Text(
+                        text = "YOUTUBE TWIN",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFF9B6CFF),
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 2.dp)
+                    )
+
+                    Text(
+                        text = "Personalized from your YouTube Music account",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp)
+                            .padding(bottom = 14.dp)
+                    )
+
+                    youtubeSections.forEach { section ->
+
+                        Spacer(
+                            modifier = Modifier.height(Dimensions.spacer)
+                        )
+
+                        Text(
+                            text = section.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = sectionTextModifier
+                        )
+
+                        section.strapline?.let { strapline ->
+                            Text(
+                                text = strapline,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .padding(bottom = 8.dp)
+                            )
+                        }
+
+                        val songs = section.items
+                            .filterIsInstance<Innertube.SongItem>()
+                            .filter { it.key.isNotEmpty() }
+                            .distinctBy { it.key }
+
+                        val visualItems = section.items
+                            .filterNot { it is Innertube.SongItem }
+                            .filter { it.key.isNotEmpty() }
+                            .distinctBy { it.key }
+
+                        if (songs.isNotEmpty()) {
+                            LazyHorizontalGrid(
+                                rows = GridCells.Fixed(
+                                    count = minOf(4, songs.size)
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(
+                                        (
+                                            songThumbnailSizeDp +
+                                                Dimensions.itemsVerticalPadding * 2
+                                            ) * minOf(4, songs.size)
+                                    )
+                            ) {
+                                items(
+                                    items = songs,
+                                    key = { song ->
+                                        "youtube-song-${section.title}-${song.key}"
+                                    }
+                                ) { song ->
+                                    SongItem(
+                                        modifier = Modifier.width(
+                                            itemInHorizontalGridWidth
+                                        ),
+                                        song = song,
+                                        onClick = {
+                                            val mediaItem =
+                                                song.asMediaItem
+
+                                            binder?.stopRadio()
+
+                                            binder?.player?.forcePlay(
+                                                mediaItem
+                                            )
+
+                                            binder?.setupRadio(
+                                                NavigationEndpoint.Endpoint.Watch(
+                                                    videoId =
+                                                        mediaItem.mediaId
+                                                )
+                                            )
+                                        },
+                                        onLongClick = {
+                                            menuState.display {
+                                                NonQueuedMediaItemMenu(
+                                                    onDismiss =
+                                                        menuState::hide,
+                                                    mediaItem =
+                                                        song.asMediaItem,
+                                                    onGoToAlbum =
+                                                        onAlbumClick,
+                                                    onGoToArtist =
+                                                        onArtistClick
+                                                )
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (visualItems.isNotEmpty()) {
+                            LazyRow(
+                                contentPadding = PaddingValues(
+                                    horizontal = 8.dp
+                                )
+                            ) {
+                                items(
+                                    items = visualItems,
+                                    key = { item ->
+                                        "youtube-${section.title}-${item::class.simpleName}-${item.key}"
+                                    }
+                                ) { item ->
+                                    when (item) {
+                                        is Innertube.AlbumItem -> {
+                                            AlbumItem(
+                                                modifier = Modifier.widthIn(
+                                                    max = itemSize
+                                                ),
+                                                album = item,
+                                                onClick = {
+                                                    onAlbumClick(item.key)
+                                                }
+                                            )
+                                        }
+
+                                        is Innertube.ArtistItem -> {
+                                            ArtistItem(
+                                                modifier = Modifier.widthIn(
+                                                    max = itemSize
+                                                ),
+                                                artist = item,
+                                                onClick = {
+                                                    onArtistClick(item.key)
+                                                }
+                                            )
+                                        }
+
+                                        is Innertube.PlaylistItem -> {
+                                            PlaylistItem(
+                                                modifier = Modifier.widthIn(
+                                                    max = itemSize
+                                                ),
+                                                playlist = item,
+                                                onClick = {
+                                                    onPlaylistClick(item.key)
+                                                }
+                                            )
+                                        }
+
+                                        is Innertube.SongItem -> Unit
+                                        is Innertube.VideoItem -> Unit
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
         } else {
             Crossfade(targetState = error, label = "RetryAnimation") { currentError ->

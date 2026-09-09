@@ -349,6 +349,17 @@ object Innertube {
         val playlistSetVideoId: String? = null
     )
 
+    data class YouTubeHomePage(
+        val sections: List<YouTubeHomeSection>,
+        val continuation: String? = null
+    )
+
+    data class YouTubeHomeSection(
+        val title: String,
+        val strapline: String? = null,
+        val items: List<Item>
+    )
+
     @Serializable
     data class RelatedPage(
         val songs: List<SongItem>? = null,
