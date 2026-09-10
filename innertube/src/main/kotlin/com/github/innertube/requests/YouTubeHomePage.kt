@@ -225,6 +225,17 @@ private fun MusicTwoRowItemRenderer.toHomeItem():
     val pageType = browse.type.orEmpty().uppercase()
     val browseId = browse.browseId.orEmpty()
 
+    fun playlistItemWithExactEndpoint(): Innertube.PlaylistItem? {
+        val item = Innertube.PlaylistItem.from(this) ?: return null
+
+        return item.copy(
+            info = Innertube.Info(
+                name = item.info?.name,
+                endpoint = browse
+            )
+        )
+    }
+
     return when {
         "ALBUM" in pageType ->
             Innertube.AlbumItem.from(this)
@@ -233,7 +244,7 @@ private fun MusicTwoRowItemRenderer.toHomeItem():
             Innertube.ArtistItem.from(this)
 
         "PLAYLIST" in pageType ->
-            Innertube.PlaylistItem.from(this)
+            playlistItemWithExactEndpoint()
 
         browseId.startsWith("MPRE", ignoreCase = true) ->
             Innertube.AlbumItem.from(this)
@@ -244,7 +255,7 @@ private fun MusicTwoRowItemRenderer.toHomeItem():
         browseId.startsWith("VL", ignoreCase = true) ||
             browseId.startsWith("PL", ignoreCase = true) ||
             browseId.startsWith("RD", ignoreCase = true) ->
-            Innertube.PlaylistItem.from(this)
+            playlistItemWithExactEndpoint()
 
         else -> null
     }
