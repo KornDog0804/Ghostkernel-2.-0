@@ -79,18 +79,44 @@ fun PlaylistScreen(
         }
 
         withContext(Dispatchers.IO) {
-            Innertube.playlistPage(browseId = browseId, params = params)
-                ?.completed()
-                ?.getOrNull()
-                ?.let { page ->
+            val initialResult = Innertube.playlistPage(
+                browseId = browseId,
+                params = params
+            )
+
+            val initialPage = initialResult?.getOrNull()
+
+            if (initialPage != null) {
+                // Show the first usable page immediately.
+                // Generated mixes commonly return 100 songs before
+                // additional continuation pages are fetched.
+                withContext(Dispatchers.Main) {
+                    playlistPage = initialPage
+
+                    if (isScreenCacheEnabled) {
+                        ScreenCache.save(cacheKey, initialPage)
+                    }
+                }
+
+                // Continue filling the collection in the background.
+                val completedPage = initialResult
+                    .completed()
+                    ?.getOrNull()
+
+                if (completedPage != null) {
                     withContext(Dispatchers.Main) {
-                        playlistPage = page
-                        paginationDebug = com.github.innertube.requests.lastPlaylistPageDebug + paginationDebugLog.toList()
+                        playlistPage = completedPage
+
+                        paginationDebug =
+                            com.github.innertube.requests.lastPlaylistPageDebug +
+                                paginationDebugLog.toList()
+
                         if (isScreenCacheEnabled) {
-                            ScreenCache.save(cacheKey, page)
+                            ScreenCache.save(cacheKey, completedPage)
                         }
                     }
                 }
+            }
         }
     }
 
