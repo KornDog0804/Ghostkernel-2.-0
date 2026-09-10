@@ -28,7 +28,7 @@ class YouTubeHomeViewModel : ViewModel() {
         loadJob?.cancel()
 
         loadJob = viewModelScope.launch(Dispatchers.IO) {
-            Log.d("GhostKernel", "YouTube Twin: loading personalized home")
+            Log.d("GhostKernel", "GhostKernel Home: loading personalized home")
 
             val result = try {
                 Innertube.youtubeHomePage()
@@ -46,19 +46,19 @@ class YouTubeHomeViewModel : ViewModel() {
             if (page != null) {
                 Log.d(
                     "GhostKernel",
-                    "YouTube Twin: loaded ${page.sections.size} personalized shelves"
+                    "GhostKernel Home: loaded ${page.sections.size} personalized shelves"
                 )
 
                 page.sections.forEach { section ->
                     Log.d(
                         "GhostKernel",
-                        "YouTube Twin shelf: ${section.title} (${section.items.size} items)"
+                        "GhostKernel Home shelf: ${section.title} (${section.items.size} items)"
                     )
                 }
             } else {
                 Log.e(
                     "GhostKernel",
-                    "YouTube Twin: personalized home failed",
+                    "GhostKernel Home: personalized home failed",
                     result.exceptionOrNull()
                 )
             }
