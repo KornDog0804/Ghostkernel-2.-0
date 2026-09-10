@@ -2,10 +2,12 @@ package com.github.innertube.requests
 
 import com.github.innertube.Innertube
 import com.github.innertube.models.BrowseResponse
+import com.github.innertube.models.ContinuationResponse
 import com.github.innertube.models.MusicCarouselShelfRenderer
 import com.github.innertube.models.MusicTwoRowItemRenderer
 import com.github.innertube.models.YouTubeClient
 import com.github.innertube.models.bodies.BrowseBody
+import com.github.innertube.models.bodies.ContinuationBody
 import com.github.innertube.utils.from
 import com.github.innertube.utils.runCatchingNonCancellable
 import io.ktor.client.call.body
@@ -68,59 +70,128 @@ suspend fun Innertube.youtubeHomePage():
                 ?.content
                 ?.sectionListRenderer
 
-    val sections = sectionListRenderer
-        ?.contents
-        .orEmpty()
-        .mapNotNull { section ->
+    fun mapCarouselSections(
+        renderer: com.github.innertube.models.SectionListRenderer?
+    ): List<Innertube.YouTubeHomeSection> =
+        renderer
+            ?.contents
+            .orEmpty()
+            .mapNotNull { section ->
 
-            val carousel = section.musicCarouselShelfRenderer
-                ?: return@mapNotNull null
+                val carousel = section.musicCarouselShelfRenderer
+                    ?: return@mapNotNull null
 
-            val header =
-                carousel.header?.musicCarouselShelfBasicHeaderRenderer
+                val header =
+                    carousel.header?.musicCarouselShelfBasicHeaderRenderer
 
-            val title = header
-                ?.title
-                ?.runs
-                ?.firstOrNull()
-                ?.text
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?: return@mapNotNull null
+                val title = header
+                    ?.title
+                    ?.runs
+                    ?.firstOrNull()
+                    ?.text
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: return@mapNotNull null
 
-            val strapline = header
-                .strapline
-                ?.runs
-                ?.firstOrNull()
-                ?.text
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
+                val strapline = header
+                    .strapline
+                    ?.runs
+                    ?.firstOrNull()
+                    ?.text
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
 
-            val items = carousel
-                .contents
-                .orEmpty()
-                .mapNotNull { content ->
-                    content.toHomeItem()
+                val items = carousel
+                    .contents
+                    .orEmpty()
+                    .mapNotNull { content ->
+                        content.toHomeItem()
+                    }
+
+                if (items.isEmpty()) {
+                    null
+                } else {
+                    Innertube.YouTubeHomeSection(
+                        title = title,
+                        strapline = strapline,
+                        items = items
+                    )
+                }
+            }
+
+    val allSections = mapCarouselSections(sectionListRenderer).toMutableList()
+
+    var continuation = sectionListRenderer
+        ?.continuations
+        ?.firstOrNull()
+        ?.nextContinuationData
+        ?.continuation
+
+    val seenContinuations = mutableSetOf<String>()
+    var continuationPage = 0
+
+    while (
+        !continuation.isNullOrBlank() &&
+        continuationPage < 4 &&
+        seenContinuations.add(continuation)
+    ) {
+        val token = continuation
+        continuationPage++
+
+        val continuationResponse =
+            client.post(BROWSE) {
+                attributes.put(Innertube.Attributes.UseCookies, true)
+
+                cookies?.let { cookieString ->
+                    header("Cookie", cookieString)
+                    header("X-Goog-AuthUser", "0")
+
+                    visitorData?.let {
+                        header("X-Goog-Visitor-Id", it)
+                    }
+
+                    header("Origin", "https://music.youtube.com")
+                    header("Referer", "https://music.youtube.com/")
+                    header("X-Origin", "https://music.youtube.com")
+
+                    generateSapisidHash(cookieString)?.let {
+                        header("Authorization", "SAPISIDHASH $it")
+                    }
                 }
 
-            if (items.isEmpty()) {
-                null
-            } else {
-                Innertube.YouTubeHomeSection(
-                    title = title,
-                    strapline = strapline,
-                    items = items
+                setBody(
+                    ContinuationBody(
+                        context = YouTubeClient.WEB_REMIX.toContext(
+                            gl = Locale.getDefault().country.ifBlank { "US" },
+                            visitorData = visitorData
+                        ),
+                        continuation = token
+                    )
                 )
-            }
-        }
+            }.body<ContinuationResponse>()
 
-    Innertube.YouTubeHomePage(
-        sections = sections,
-        continuation = sectionListRenderer
+        val continuationRenderer =
+            continuationResponse
+                .continuationContents
+                ?.sectionListContinuation
+
+        allSections += mapCarouselSections(continuationRenderer)
+
+        continuation = continuationRenderer
             ?.continuations
             ?.firstOrNull()
             ?.nextContinuationData
             ?.continuation
+    }
+
+    val dedupedSections = allSections
+        .distinctBy { section ->
+            section.title.trim().lowercase()
+        }
+
+    Innertube.YouTubeHomePage(
+        sections = dedupedSections,
+        continuation = continuation
     ).takeIf { it.sections.isNotEmpty() }
 }
 
