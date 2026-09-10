@@ -9,6 +9,7 @@ import com.github.innertube.models.bodies.BrowseBody
 import com.github.innertube.utils.from
 import com.github.innertube.utils.runCatchingNonCancellable
 import io.ktor.client.call.body
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import java.util.Locale
@@ -28,6 +29,23 @@ suspend fun Innertube.youtubeHomePage():
 
     val response = client.post(BROWSE) {
         attributes.put(Innertube.Attributes.UseCookies, true)
+
+        cookies?.let { cookieString ->
+            header("Cookie", cookieString)
+            header("X-Goog-AuthUser", "0")
+
+            visitorData?.let {
+                header("X-Goog-Visitor-Id", it)
+            }
+
+            header("Origin", "https://music.youtube.com")
+            header("Referer", "https://music.youtube.com/")
+            header("X-Origin", "https://music.youtube.com")
+
+            generateSapisidHash(cookieString)?.let {
+                header("Authorization", "SAPISIDHASH $it")
+            }
+        }
 
         setBody(
             BrowseBody(
