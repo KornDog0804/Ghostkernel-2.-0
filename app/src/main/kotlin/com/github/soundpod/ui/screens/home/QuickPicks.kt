@@ -86,7 +86,7 @@ import java.io.IOException
 fun QuickPicks(
     onAlbumClick: (String) -> Unit,
     onArtistClick: (String) -> Unit,
-    onPlaylistClick: (String) -> Unit,
+    onPlaylistClick: (String, String?) -> Unit,
     onOfflinePlaylistClick: () -> Unit
 ) {
     val binder = LocalPlayerServiceBinder.current
@@ -216,7 +216,7 @@ fun QuickPicks(
                 Text(text = stringResource(id = R.string.recommended_playlists), style = MaterialTheme.typography.titleMedium, modifier = sectionTextModifier)
                 LazyRow(contentPadding = PaddingValues(horizontal = 8.dp)) {
                     items(items = playlists.filter { it.key.isNotEmpty() }.distinctBy { it.key }, key = Innertube.PlaylistItem::key) { playlist ->
-                        PlaylistItem(modifier = Modifier.widthIn(max = itemSize), playlist = playlist, onClick = { onPlaylistClick(playlist.key) })
+                        PlaylistItem(modifier = Modifier.widthIn(max = itemSize), playlist = playlist, onClick = { onPlaylistClick(playlist.key, null) })
                     }
                 }
             }
@@ -227,25 +227,7 @@ fun QuickPicks(
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { youtubeSections ->
 
-                    Spacer(modifier = Modifier.height(28.dp))
-
-                    Text(
-                        text = "YOUTUBE TWIN",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFF9B6CFF),
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 2.dp)
-                    )
-
-                    Text(
-                        text = "Personalized from your YouTube Music account",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp)
-                            .padding(bottom = 14.dp)
-                    )
+                      Spacer(modifier = Modifier.height(20.dp))
 
                     youtubeSections.forEach { section ->
 
@@ -385,7 +367,10 @@ fun QuickPicks(
                                                 ),
                                                 playlist = item,
                                                 onClick = {
-                                                    onPlaylistClick(item.key)
+                                                    onPlaylistClick(
+                                                        item.info?.endpoint?.browseId.orEmpty(),
+                                                        item.info?.endpoint?.params
+                                                    )
                                                 }
                                             )
                                         }

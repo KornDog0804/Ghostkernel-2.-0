@@ -57,28 +57,29 @@ import kotlinx.coroutines.withContext
 @Composable
 fun PlaylistScreen(
     browseId: String,
+    params: String? = null,
     onBack: () -> Unit,
     onGoToAlbum: (String) -> Unit,
     onGoToArtist: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val (colorPalette) = LocalAppearance.current
-    var playlistPage: Innertube.PlaylistOrAlbumPage? by remember(browseId) { mutableStateOf(null) }
+    var playlistPage: Innertube.PlaylistOrAlbumPage? by remember(browseId, params) { mutableStateOf(null) }
     var isImportingPlaylist by rememberSaveable { mutableStateOf(false) }
-    var paginationDebug by remember(browseId) { mutableStateOf<List<String>>(emptyList()) }
+    var paginationDebug by remember(browseId, params) { mutableStateOf<List<String>>(emptyList()) }
 
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(browseId) {
+    LaunchedEffect(browseId, params) {
         val isScreenCacheEnabled = context.preferences.getBoolean(isScreenCacheEnabledKey, true)
-        val cacheKey = "playlist_$browseId"
+        val cacheKey = "playlist_${browseId}_${params.orEmpty().hashCode()}"
 
         if (playlistPage == null && isScreenCacheEnabled) {
             playlistPage = ScreenCache.load(cacheKey)
         }
 
         withContext(Dispatchers.IO) {
-            Innertube.playlistPage(browseId = browseId)
+            Innertube.playlistPage(browseId = browseId, params = params)
                 ?.completed()
                 ?.getOrNull()
                 ?.let { page ->
@@ -201,7 +202,7 @@ fun PlaylistScreen(
                     playlistPage = null
 
                     scope.launch {
-                        Innertube.playlistPage(browseId = browseId)
+                        Innertube.playlistPage(browseId = browseId, params = params)
                             ?.completed()
                             ?.getOrNull()
                             ?.let { refreshedPage ->

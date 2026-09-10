@@ -16,7 +16,7 @@ sealed class Routes {
     data class Album(val id: String)
 
     @Serializable
-    data class Playlist(val id: String)
+    data class Playlist(val id: String, val params: String? = null)
 
     @Serializable
     data object Player

@@ -155,6 +155,7 @@ fun MainNavigation(
 
             PlaylistScreen(
                 browseId = route.id,
+                params = route.params,
                 onBack = popDestination,
                 onGoToAlbum = navigateToAlbum,
                 onGoToArtist = navigateToArtist

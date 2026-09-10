@@ -119,8 +119,13 @@ fun HomeScreen(
                     0 -> QuickPicks(
                         onAlbumClick = navigateToAlbum,
                         onArtistClick = navigateToArtist,
-                        onPlaylistClick = { browseId ->
-                            navController.navigate(route = Routes.Playlist(id = browseId))
+                        onPlaylistClick = { browseId, params ->
+                            navController.navigate(
+                                route = Routes.Playlist(
+                                    id = browseId,
+                                    params = params
+                                )
+                            )
                         },
                         onOfflinePlaylistClick = {
                             navController.navigate(route = Routes.BuiltInPlaylist(index = 1))
