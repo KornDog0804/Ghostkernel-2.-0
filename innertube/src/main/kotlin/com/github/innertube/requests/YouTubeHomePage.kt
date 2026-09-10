@@ -214,6 +214,21 @@ private fun MusicCarouselShelfRenderer.Content.toHomeItem():
 private fun MusicTwoRowItemRenderer.toHomeItem():
     Innertube.Item? {
 
+    val rendererNav = navigationEndpoint
+    val titleText = title?.runs?.firstOrNull()?.text
+
+    println(
+        "GhostKernel-MixEndpoint: " +
+            "title=$titleText " +
+            "browseId=${rendererNav?.browseEndpoint?.browseId} " +
+            "browseParams=${rendererNav?.browseEndpoint?.params} " +
+            "watchPlaylistId=${rendererNav?.watchPlaylistEndpoint?.playlistId} " +
+            "watchPlaylistParams=${rendererNav?.watchPlaylistEndpoint?.params} " +
+            "watchVideoId=${rendererNav?.watchEndpoint?.videoId} " +
+            "watchPlaylistFromWatch=${rendererNav?.watchEndpoint?.playlistId} " +
+            "watchParams=${rendererNav?.watchEndpoint?.params}"
+    )
+
     val browse = navigationEndpoint?.browseEndpoint
         ?: title
             ?.runs
